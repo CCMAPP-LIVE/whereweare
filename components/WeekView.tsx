@@ -15,7 +15,9 @@ export type EventLite = {
 
 type SlotVal = { status: Status | null; note: string | null };
 type DaySlots = Partial<Record<Slot, SlotVal>>;
+type DayTimes = { leave: string | null; return: string | null };
 type AvailabilityMap = Record<string, Record<string, DaySlots>>;
+type TimesMap = Record<string, Record<string, DayTimes>>;
 type EventsMap = Record<string, Record<string, EventLite[]>>;
 
 type Props = {
@@ -24,6 +26,7 @@ type Props = {
   days: string[];
   today: string;
   availability: AvailabilityMap;
+  times: TimesMap;
   events: EventsMap;
   calendarsConfigured: boolean;
 };
@@ -34,13 +37,14 @@ export default function WeekView({
   days,
   today,
   availability,
+  times,
   events,
   calendarsConfigured,
 }: Props) {
   const [avail, setAvail] = useState<AvailabilityMap>(availability);
-  const [editing, setEditing] = useState<string | null>(null); // day key
+  const [dayTimes, setDayTimes] = useState<TimesMap>(times);
+  const [editing, setEditing] = useState<string | null>(null);
 
-  // Show the current user first.
   const orderedPeople = useMemo(() => {
     const me = people.find((p) => p.id === currentUserId);
     const others = people.filter((p) => p.id !== currentUserId);
@@ -53,17 +57,22 @@ export default function WeekView({
     return chunks;
   }, [days]);
 
-  async function saveDay(day: string, slots: DaySlots) {
-    const prev = avail[currentUserId]?.[day] ?? {};
-    // Optimistic update.
+  async function saveDay(day: string, slots: DaySlots, t: DayTimes) {
+    const prevSlots = avail[currentUserId]?.[day] ?? {};
+    const prevTimes = dayTimes[currentUserId]?.[day] ?? { leave: null, return: null };
+
     setAvail((cur) => ({
       ...cur,
       [currentUserId]: { ...cur[currentUserId], [day]: slots },
     }));
+    setDayTimes((cur) => ({
+      ...cur,
+      [currentUserId]: { ...cur[currentUserId], [day]: t },
+    }));
     setEditing(null);
 
     for (const { value: slot } of SLOTS) {
-      const before = prev[slot];
+      const before = prevSlots[slot];
       const after = slots[slot];
       const changed =
         (before?.status ?? null) !== (after?.status ?? null) ||
@@ -78,6 +87,14 @@ export default function WeekView({
           status: after?.status ?? null,
           note: after?.note ?? null,
         }),
+      }).catch(() => {});
+    }
+
+    if (prevTimes.leave !== t.leave || prevTimes.return !== t.return) {
+      await fetch("/api/day-times", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ day, leaveTime: t.leave, returnTime: t.return }),
       }).catch(() => {});
     }
   }
@@ -106,6 +123,7 @@ export default function WeekView({
                 people={orderedPeople}
                 currentUserId={currentUserId}
                 avail={avail}
+                dayTimes={dayTimes}
                 events={events}
                 onEdit={() => setEditing(day)}
               />
@@ -117,9 +135,12 @@ export default function WeekView({
       {editing && (
         <DayEditor
           day={editing}
-          initial={avail[currentUserId]?.[editing] ?? {}}
+          initialSlots={avail[currentUserId]?.[editing] ?? {}}
+          initialTimes={
+            dayTimes[currentUserId]?.[editing] ?? { leave: null, return: null }
+          }
           onClose={() => setEditing(null)}
-          onSave={(slots) => saveDay(editing, slots)}
+          onSave={(slots, t) => saveDay(editing, slots, t)}
         />
       )}
     </main>
@@ -142,12 +163,24 @@ function Legend() {
   );
 }
 
+function TimesLine({ t }: { t?: DayTimes }) {
+  if (!t || (!t.leave && !t.return)) return null;
+  return (
+    <div className="mt-1 text-[11px] text-neutral-500">
+      {t.leave && <span>🚪 Out {t.leave}</span>}
+      {t.leave && t.return && <span> · </span>}
+      {t.return && <span>🏡 Back {t.return}</span>}
+    </div>
+  );
+}
+
 function DayCard({
   day,
   isToday,
   people,
   currentUserId,
   avail,
+  dayTimes,
   events,
   onEdit,
 }: {
@@ -156,6 +189,7 @@ function DayCard({
   people: { id: string; name: string }[];
   currentUserId: string;
   avail: AvailabilityMap;
+  dayTimes: TimesMap;
   events: EventsMap;
   onEdit: () => void;
 }) {
@@ -168,16 +202,14 @@ function DayCard({
           : "border-black/10 dark:border-white/10"
       }`}
     >
-      <div className="mb-2 flex items-baseline justify-between">
-        <div className="flex items-baseline gap-2">
-          <span className="font-semibold">{weekday}</span>
-          <span className="text-sm text-neutral-400">{date}</span>
-          {isToday && (
-            <span className="rounded-full bg-teal-600 px-2 py-0.5 text-[10px] font-medium text-white">
-              Today
-            </span>
-          )}
-        </div>
+      <div className="mb-2 flex items-baseline gap-2">
+        <span className="font-semibold">{weekday}</span>
+        <span className="text-sm text-neutral-400">{date}</span>
+        {isToday && (
+          <span className="rounded-full bg-teal-600 px-2 py-0.5 text-[10px] font-medium text-white">
+            Today
+          </span>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -213,7 +245,9 @@ function DayCard({
                         >
                           <span>{meta.emoji}</span>
                           {meta.label}
-                          {val?.note ? <span className="opacity-70">· {val.note}</span> : null}
+                          {val?.note ? (
+                            <span className="opacity-70">· {val.note}</span>
+                          ) : null}
                         </span>
                       ) : (
                         <span className="text-xs text-neutral-300 dark:text-neutral-600">
@@ -225,6 +259,7 @@ function DayCard({
                 })}
               </div>
 
+              <TimesLine t={dayTimes[p.id]?.[day]} />
               <EventList items={events[p.id]?.[day] ?? []} />
             </div>
           );
@@ -239,7 +274,10 @@ function EventList({ items }: { items: EventLite[] }) {
   return (
     <ul className="mt-2 space-y-0.5 border-t border-black/5 pt-2 dark:border-white/5">
       {items.map((ev) => (
-        <li key={ev.id} className="flex items-center gap-1.5 text-[11px] text-neutral-500">
+        <li
+          key={ev.id}
+          className="flex items-center gap-1.5 text-[11px] text-neutral-500"
+        >
           <span
             className="inline-block h-2 w-2 shrink-0 rounded-full"
             style={{ background: ev.color ?? "#9ca3af" }}
@@ -254,23 +292,24 @@ function EventList({ items }: { items: EventLite[] }) {
 
 function DayEditor({
   day,
-  initial,
+  initialSlots,
+  initialTimes,
   onClose,
   onSave,
 }: {
   day: string;
-  initial: DaySlots;
+  initialSlots: DaySlots;
+  initialTimes: DayTimes;
   onClose: () => void;
-  onSave: (slots: DaySlots) => void;
+  onSave: (slots: DaySlots, times: DayTimes) => void;
 }) {
-  const [draft, setDraft] = useState<DaySlots>(() => ({ ...initial }));
+  const [draft, setDraft] = useState<DaySlots>(() => ({ ...initialSlots }));
+  const [leave, setLeave] = useState<string>(initialTimes.leave ?? "");
+  const [back, setBack] = useState<string>(initialTimes.return ?? "");
   const { weekday, date } = dayLabel(day);
 
   function setSlot(slot: Slot, status: Status | null) {
-    setDraft((d) => ({
-      ...d,
-      [slot]: { status, note: d[slot]?.note ?? null },
-    }));
+    setDraft((d) => ({ ...d, [slot]: { status, note: d[slot]?.note ?? null } }));
   }
   function setNote(slot: Slot, note: string) {
     setDraft((d) => ({
@@ -285,7 +324,7 @@ function DayEditor({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-t-2xl bg-white p-4 shadow-xl dark:bg-neutral-900 sm:rounded-2xl"
+        className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-4 shadow-xl dark:bg-neutral-900 sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">
@@ -331,10 +370,38 @@ function DayEditor({
               </div>
             );
           })}
+
+          <div className="border-t border-black/10 pt-3 dark:border-white/10">
+            <div className="mb-1.5 text-xs font-medium uppercase text-neutral-400">
+              Out &amp; back times
+            </div>
+            <div className="flex gap-3">
+              <label className="flex-1 text-sm">
+                <span className="mb-1 block text-neutral-500">🚪 Out at</span>
+                <input
+                  type="time"
+                  value={leave}
+                  onChange={(e) => setLeave(e.target.value)}
+                  className="w-full rounded-lg border border-black/10 bg-transparent px-2 py-1.5 dark:border-white/10"
+                />
+              </label>
+              <label className="flex-1 text-sm">
+                <span className="mb-1 block text-neutral-500">🏡 Back at</span>
+                <input
+                  type="time"
+                  value={back}
+                  onChange={(e) => setBack(e.target.value)}
+                  className="w-full rounded-lg border border-black/10 bg-transparent px-2 py-1.5 dark:border-white/10"
+                />
+              </label>
+            </div>
+          </div>
         </div>
 
         <button
-          onClick={() => onSave(draft)}
+          onClick={() =>
+            onSave(draft, { leave: leave || null, return: back || null })
+          }
           className="mt-5 w-full rounded-xl bg-teal-600 px-4 py-2.5 font-medium text-white hover:bg-teal-700"
         >
           Save

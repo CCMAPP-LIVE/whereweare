@@ -76,6 +76,25 @@ export default async function Home() {
     };
   }
 
+  // Out/back times for the visible range.
+  const { data: dtimes } = await supabase
+    .from("day_times")
+    .select("user_id, day, leave_time, return_time")
+    .gte("day", firstDay)
+    .lte("day", lastDay);
+
+  const times: Record<
+    string,
+    Record<string, { leave: string | null; return: string | null }>
+  > = {};
+  for (const p of people) times[p.id] = {};
+  for (const t of dtimes ?? []) {
+    (times[t.user_id] ??= {})[t.day] = {
+      leave: t.leave_time,
+      return: t.return_time,
+    };
+  }
+
   // Calendar events (best-effort: needs service-role + provider setup).
   const events: Record<string, Record<string, EventLite[]>> = {};
   for (const p of people) events[p.id] = {};
@@ -118,6 +137,7 @@ export default async function Home() {
         days={days}
         today={today}
         availability={availability}
+        times={times}
         events={events}
         calendarsConfigured={calendarsConfigured}
       />

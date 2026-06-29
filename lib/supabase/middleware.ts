@@ -6,6 +6,7 @@ import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/env";
 /** Paths reachable without a session. */
 const PUBLIC_PREFIXES = [
   "/login",
+  "/signup",
   "/auth",
   "/api/cron",
   "/manifest.webmanifest",

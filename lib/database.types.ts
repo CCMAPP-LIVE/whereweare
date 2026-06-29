@@ -120,6 +120,30 @@ export type Database = {
         }
         Relationships: []
       }
+      day_times: {
+        Row: {
+          day: string
+          leave_time: string | null
+          return_time: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          day: string
+          leave_time?: string | null
+          return_time?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          day?: string
+          leave_time?: string | null
+          return_time?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       life_calendar_sync: {
         Row: {
           day: string

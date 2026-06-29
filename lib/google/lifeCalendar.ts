@@ -44,7 +44,19 @@ export async function syncDayToLifeCalendar(
   for (const r of rows ?? []) {
     slots[r.slot] = { status: r.status, note: r.note };
   }
-  const summary = buildDaySummary(name, slots);
+
+  // Out/back times for the day.
+  const { data: dt } = await admin
+    .from("day_times")
+    .select("leave_time, return_time")
+    .eq("user_id", userId)
+    .eq("day", day)
+    .maybeSingle();
+
+  const summary = buildDaySummary(name, slots, {
+    leave: dt?.leave_time ?? null,
+    return: dt?.return_time ?? null,
+  });
 
   // Existing sync record (if any).
   const { data: sync } = await admin

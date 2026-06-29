@@ -27,6 +27,18 @@ mostly **external configuration** (Google, Microsoft, env vars), below.
 
 ## Setup checklist
 
+### 0. Accounts & sign-in (email + password)
+People **sign up in the app** with email + password (`/signup`) — Google/Microsoft
+are connected separately, only for calendars. In Supabase:
+- **Authentication → Providers → Email**: enabled. For instant sign-up while it's
+  just the two of you, you can turn **Confirm email** off (otherwise users must
+  click a confirmation link, which needs SMTP configured).
+- **Authentication → Settings → enable "Manual linking"** — required so each user
+  can connect Google/Outlook from the in-app Settings page.
+- Manage accounts in-app at **/users** (the "People" tab) — see who's in, what
+  they've connected, and remove anyone. Once you're both in, consider disabling
+  new sign-ups in Supabase to keep it private.
+
 ### 1. Google OAuth (read personal Google calendars)
 1. [Google Cloud Console](https://console.cloud.google.com) → create/pick a project.
 2. **APIs & Services → Library →** enable **Google Calendar API**.
