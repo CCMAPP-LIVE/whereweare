@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import NavBar from "@/components/NavBar";
 import UserRow, { type ManagedUser } from "@/components/UserRow";
+import InviteForm from "@/components/InviteForm";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +58,16 @@ export default async function UsersPage() {
           Everyone with an account. Each person connects their own calendars and
           sets their own availability.
         </p>
+
+        <section className="rounded-2xl border border-black/10 p-4 dark:border-white/10">
+          <h2 className="font-semibold">Invite someone</h2>
+          <p className="mb-3 mt-0.5 text-sm text-neutral-500">
+            Access is invite-only. Create a private single-use link and send it
+            to the person you want to add.
+          </p>
+          <InviteForm />
+        </section>
+
         {configError ? (
           <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
             Managing people needs the Supabase service-role key set (see README).

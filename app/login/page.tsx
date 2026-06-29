@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -65,11 +64,9 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="mt-4 text-center text-sm text-neutral-500">
-          No account?{" "}
-          <Link href="/signup" className="font-medium text-teal-600 hover:underline">
-            Create one
-          </Link>
+        <p className="mt-4 text-center text-xs text-neutral-400">
+          Access is invite-only. Ask an existing member to send you an invite
+          link.
         </p>
       </div>
     </main>

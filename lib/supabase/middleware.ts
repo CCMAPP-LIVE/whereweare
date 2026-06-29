@@ -7,6 +7,8 @@ import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/env";
 const PUBLIC_PREFIXES = [
   "/login",
   "/signup",
+  "/join",
+  "/api/join",
   "/auth",
   "/api/cron",
   "/manifest.webmanifest",
