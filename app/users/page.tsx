@@ -1,9 +1,12 @@
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { siteUrl } from "@/lib/env";
 import NavBar from "@/components/NavBar";
 import UserRow, { type ManagedUser } from "@/components/UserRow";
 import InviteForm from "@/components/InviteForm";
+import PendingInvites, { type PendingInvite } from "@/components/PendingInvites";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +16,19 @@ export default async function UsersPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  // Outstanding invites (not yet claimed) for the Copy/Revoke list.
+  const { data: pendingRows } = await supabase
+    .from("invites")
+    .select("id, email, note, code, created_at")
+    .is("used_by", null)
+    .order("created_at", { ascending: false });
+  const pending: PendingInvite[] = pendingRows ?? [];
+
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";
+  const proto = h.get("x-forwarded-proto") ?? "https";
+  const origin = host ? `${proto}://${host}` : siteUrl();
 
   let rows: ManagedUser[] = [];
   let configError = false;
@@ -62,10 +78,19 @@ export default async function UsersPage() {
         <section className="rounded-2xl border border-black/10 p-4 dark:border-white/10">
           <h2 className="font-semibold">Invite someone</h2>
           <p className="mb-3 mt-0.5 text-sm text-neutral-500">
-            Access is invite-only. Create a private single-use link and send it
-            to the person you want to add.
+            Access is invite-only. The link is single-use and locked to the
+            email you enter — only that address can use it.
           </p>
           <InviteForm />
+        </section>
+
+        <section className="rounded-2xl border border-black/10 p-4 dark:border-white/10">
+          <h2 className="font-semibold">Pending invites</h2>
+          <p className="mb-3 mt-0.5 text-sm text-neutral-500">
+            Outstanding invites you’ve sent. Copy the link again or revoke it
+            if you change your mind.
+          </p>
+          <PendingInvites invites={pending} origin={origin} />
         </section>
 
         {configError ? (

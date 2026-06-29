@@ -8,9 +8,12 @@ import { APP_NAME } from "@/lib/constants";
 
 function JoinInner() {
   const router = useRouter();
-  const code = useSearchParams().get("code") ?? "";
+  const params = useSearchParams();
+  const code = params.get("code") ?? "";
+  const lockedEmail = params.get("email") ?? "";
+
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(lockedEmail);
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,8 +80,16 @@ function JoinInner() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Email"
-            className="w-full rounded-xl border border-black/10 bg-transparent px-3 py-2.5 text-sm dark:border-white/10"
+            readOnly={Boolean(lockedEmail)}
+            className={`w-full rounded-xl border border-black/10 bg-transparent px-3 py-2.5 text-sm dark:border-white/10 ${
+              lockedEmail ? "cursor-not-allowed text-neutral-500" : ""
+            }`}
           />
+          {lockedEmail && (
+            <p className="-mt-2 text-[11px] text-neutral-400">
+              This invite is locked to this email address.
+            </p>
+          )}
           <input
             type="password"
             required
