@@ -1,65 +1,126 @@
-import Image from "next/image";
+import { redirect } from "next/navigation";
+import { formatInTimeZone } from "date-fns-tz";
+import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getEventsForUser } from "@/lib/calendars";
+import { londonToday, nextDay, visibleDays, visibleRange } from "@/lib/time";
+import { APP_TIMEZONE } from "@/lib/constants";
+import type { NormalizedEvent, Slot, Status } from "@/lib/types";
+import NavBar from "@/components/NavBar";
+import WeekView, { type EventLite } from "@/components/WeekView";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+function timeOf(ev: NormalizedEvent): string {
+  if (ev.allDay) return "All day";
+  if (ev.provider === "google")
+    return formatInTimeZone(new Date(ev.start), APP_TIMEZONE, "HH:mm");
+  return ev.start.slice(11, 16); // Microsoft times are already Europe/London
+}
+
+function daysOf(ev: NormalizedEvent): string[] {
+  if (ev.allDay) {
+    const keys: string[] = [];
+    let d = ev.start.slice(0, 10);
+    const end = ev.end.slice(0, 10);
+    while (d < end) {
+      keys.push(d);
+      d = nextDay(d);
+    }
+    return keys.length ? keys : [ev.start.slice(0, 10)];
+  }
+  if (ev.provider === "google")
+    return [formatInTimeZone(new Date(ev.start), APP_TIMEZONE, "yyyy-MM-dd")];
+  return [ev.start.slice(0, 10)];
+}
+
+export default async function Home() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const days = visibleDays();
+  const firstDay = days[0];
+  const lastDay = days[days.length - 1];
+  const { timeMin, timeMax } = visibleRange();
+  const today = londonToday();
+
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, display_name, created_at")
+    .order("created_at");
+  const people = (profiles ?? []).map((p) => ({
+    id: p.id,
+    name: p.display_name?.trim() || "Someone",
+  }));
+
+  // Availability for the visible range.
+  const { data: avail } = await supabase
+    .from("availability")
+    .select("user_id, day, slot, status, note")
+    .gte("day", firstDay)
+    .lte("day", lastDay);
+
+  const availability: Record<
+    string,
+    Record<string, Partial<Record<Slot, { status: Status | null; note: string | null }>>>
+  > = {};
+  for (const p of people) availability[p.id] = {};
+  for (const a of avail ?? []) {
+    (availability[a.user_id] ??= {});
+    (availability[a.user_id][a.day] ??= {})[a.slot] = {
+      status: a.status,
+      note: a.note,
+    };
+  }
+
+  // Calendar events (best-effort: needs service-role + provider setup).
+  const events: Record<string, Record<string, EventLite[]>> = {};
+  for (const p of people) events[p.id] = {};
+  let calendarsConfigured = true;
+  try {
+    const admin = createAdminClient();
+    for (const p of people) {
+      let evs: NormalizedEvent[] = [];
+      try {
+        evs = await getEventsForUser(admin, p.id, timeMin, timeMax);
+      } catch {
+        evs = [];
+      }
+      for (const ev of evs) {
+        for (const day of daysOf(ev)) {
+          if (day < firstDay || day > lastDay) continue;
+          (events[p.id][day] ??= []).push({
+            id: `${ev.id}:${day}`,
+            title: ev.title,
+            time: timeOf(ev),
+            color: ev.color,
+            provider: ev.provider,
+          });
+        }
+      }
+      for (const day of Object.keys(events[p.id])) {
+        events[p.id][day].sort((a, b) => a.time.localeCompare(b.time));
+      }
+    }
+  } catch {
+    calendarsConfigured = false; // SUPABASE_SERVICE_ROLE_KEY not set yet
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+    <>
+      <NavBar />
+      <WeekView
+        currentUserId={user.id}
+        people={people}
+        days={days}
+        today={today}
+        availability={availability}
+        events={events}
+        calendarsConfigured={calendarsConfigured}
+      />
+    </>
   );
 }

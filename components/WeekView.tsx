@@ -1,0 +1,371 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { SLOTS, STATUSES, STATUS_MAP } from "@/lib/constants";
+import { dayLabel } from "@/lib/time";
+import type { Slot, Status } from "@/lib/types";
+
+export type EventLite = {
+  id: string;
+  title: string;
+  time: string;
+  color: string | null;
+  provider: "google" | "microsoft";
+};
+
+type SlotVal = { status: Status | null; note: string | null };
+type DaySlots = Partial<Record<Slot, SlotVal>>;
+type AvailabilityMap = Record<string, Record<string, DaySlots>>;
+type EventsMap = Record<string, Record<string, EventLite[]>>;
+
+type Props = {
+  currentUserId: string;
+  people: { id: string; name: string }[];
+  days: string[];
+  today: string;
+  availability: AvailabilityMap;
+  events: EventsMap;
+  calendarsConfigured: boolean;
+};
+
+export default function WeekView({
+  currentUserId,
+  people,
+  days,
+  today,
+  availability,
+  events,
+  calendarsConfigured,
+}: Props) {
+  const [avail, setAvail] = useState<AvailabilityMap>(availability);
+  const [editing, setEditing] = useState<string | null>(null); // day key
+
+  // Show the current user first.
+  const orderedPeople = useMemo(() => {
+    const me = people.find((p) => p.id === currentUserId);
+    const others = people.filter((p) => p.id !== currentUserId);
+    return me ? [me, ...others] : people;
+  }, [people, currentUserId]);
+
+  const weeks = useMemo(() => {
+    const chunks: string[][] = [];
+    for (let i = 0; i < days.length; i += 7) chunks.push(days.slice(i, i + 7));
+    return chunks;
+  }, [days]);
+
+  async function saveDay(day: string, slots: DaySlots) {
+    const prev = avail[currentUserId]?.[day] ?? {};
+    // Optimistic update.
+    setAvail((cur) => ({
+      ...cur,
+      [currentUserId]: { ...cur[currentUserId], [day]: slots },
+    }));
+    setEditing(null);
+
+    for (const { value: slot } of SLOTS) {
+      const before = prev[slot];
+      const after = slots[slot];
+      const changed =
+        (before?.status ?? null) !== (after?.status ?? null) ||
+        (before?.note ?? null) !== (after?.note ?? null);
+      if (!changed) continue;
+      await fetch("/api/availability", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          day,
+          slot,
+          status: after?.status ?? null,
+          note: after?.note ?? null,
+        }),
+      }).catch(() => {});
+    }
+  }
+
+  return (
+    <main className="mx-auto w-full max-w-5xl flex-1 p-3 sm:p-5">
+      <Legend />
+      {!calendarsConfigured && (
+        <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+          Calendar sync isn’t configured yet — showing availability only. Connect
+          calendars in Settings once setup is complete.
+        </p>
+      )}
+
+      {weeks.map((week, wi) => (
+        <section key={wi} className="mb-6">
+          <h2 className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-neutral-400">
+            {wi === 0 ? "This week" : wi === 1 ? "Next week" : `Week ${wi + 1}`}
+          </h2>
+          <div className="grid gap-2">
+            {week.map((day) => (
+              <DayCard
+                key={day}
+                day={day}
+                isToday={day === today}
+                people={orderedPeople}
+                currentUserId={currentUserId}
+                avail={avail}
+                events={events}
+                onEdit={() => setEditing(day)}
+              />
+            ))}
+          </div>
+        </section>
+      ))}
+
+      {editing && (
+        <DayEditor
+          day={editing}
+          initial={avail[currentUserId]?.[editing] ?? {}}
+          onClose={() => setEditing(null)}
+          onSave={(slots) => saveDay(editing, slots)}
+        />
+      )}
+    </main>
+  );
+}
+
+function Legend() {
+  return (
+    <div className="mb-3 flex flex-wrap gap-2 px-1 text-xs text-neutral-500">
+      {STATUSES.map((s) => (
+        <span key={s.value} className="inline-flex items-center gap-1">
+          <span
+            className="inline-block h-2.5 w-2.5 rounded-full"
+            style={{ background: s.color }}
+          />
+          {s.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function DayCard({
+  day,
+  isToday,
+  people,
+  currentUserId,
+  avail,
+  events,
+  onEdit,
+}: {
+  day: string;
+  isToday: boolean;
+  people: { id: string; name: string }[];
+  currentUserId: string;
+  avail: AvailabilityMap;
+  events: EventsMap;
+  onEdit: () => void;
+}) {
+  const { weekday, date } = dayLabel(day);
+  return (
+    <div
+      className={`rounded-2xl border p-3 ${
+        isToday
+          ? "border-teal-500 bg-teal-50/50 dark:bg-teal-950/20"
+          : "border-black/10 dark:border-white/10"
+      }`}
+    >
+      <div className="mb-2 flex items-baseline justify-between">
+        <div className="flex items-baseline gap-2">
+          <span className="font-semibold">{weekday}</span>
+          <span className="text-sm text-neutral-400">{date}</span>
+          {isToday && (
+            <span className="rounded-full bg-teal-600 px-2 py-0.5 text-[10px] font-medium text-white">
+              Today
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        {people.map((p) => {
+          const isMe = p.id === currentUserId;
+          return (
+            <div key={p.id}>
+              <div className="mb-1 flex items-center justify-between">
+                <span className="text-sm font-medium">{p.name}</span>
+                {isMe && (
+                  <button
+                    onClick={onEdit}
+                    className="text-xs text-teal-600 hover:underline"
+                  >
+                    Edit
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-col gap-1">
+                {SLOTS.map((s) => {
+                  const val = avail[p.id]?.[day]?.[s.value];
+                  const meta = val?.status ? STATUS_MAP[val.status] : null;
+                  return (
+                    <div key={s.value} className="flex items-center gap-2 text-sm">
+                      <span className="w-7 shrink-0 text-[11px] uppercase text-neutral-400">
+                        {s.label}
+                      </span>
+                      {meta ? (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs"
+                          style={{ background: `${meta.color}1a`, color: meta.color }}
+                          title={val?.note ?? undefined}
+                        >
+                          <span>{meta.emoji}</span>
+                          {meta.label}
+                          {val?.note ? <span className="opacity-70">· {val.note}</span> : null}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-neutral-300 dark:text-neutral-600">
+                          —
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <EventList items={events[p.id]?.[day] ?? []} />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function EventList({ items }: { items: EventLite[] }) {
+  if (items.length === 0) return null;
+  return (
+    <ul className="mt-2 space-y-0.5 border-t border-black/5 pt-2 dark:border-white/5">
+      {items.map((ev) => (
+        <li key={ev.id} className="flex items-center gap-1.5 text-[11px] text-neutral-500">
+          <span
+            className="inline-block h-2 w-2 shrink-0 rounded-full"
+            style={{ background: ev.color ?? "#9ca3af" }}
+          />
+          <span className="shrink-0 tabular-nums">{ev.time}</span>
+          <span className="truncate">{ev.title}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function DayEditor({
+  day,
+  initial,
+  onClose,
+  onSave,
+}: {
+  day: string;
+  initial: DaySlots;
+  onClose: () => void;
+  onSave: (slots: DaySlots) => void;
+}) {
+  const [draft, setDraft] = useState<DaySlots>(() => ({ ...initial }));
+  const { weekday, date } = dayLabel(day);
+
+  function setSlot(slot: Slot, status: Status | null) {
+    setDraft((d) => ({
+      ...d,
+      [slot]: { status, note: d[slot]?.note ?? null },
+    }));
+  }
+  function setNote(slot: Slot, note: string) {
+    setDraft((d) => ({
+      ...d,
+      [slot]: { status: d[slot]?.status ?? null, note: note || null },
+    }));
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-30 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-t-2xl bg-white p-4 shadow-xl dark:bg-neutral-900 sm:rounded-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="font-semibold">
+            {weekday} <span className="text-neutral-400">{date}</span>
+          </h3>
+          <button onClick={onClose} className="text-sm text-neutral-400">
+            Cancel
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          {SLOTS.map((s) => {
+            const cur = draft[s.value]?.status ?? null;
+            return (
+              <div key={s.value}>
+                <div className="mb-1 text-xs font-medium uppercase text-neutral-400">
+                  {s.label}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  <OptionButton
+                    active={cur === null}
+                    label="—"
+                    color="#9ca3af"
+                    onClick={() => setSlot(s.value, null)}
+                  />
+                  {STATUSES.map((st) => (
+                    <OptionButton
+                      key={st.value}
+                      active={cur === st.value}
+                      label={`${st.emoji} ${st.label}`}
+                      color={st.color}
+                      onClick={() => setSlot(s.value, st.value)}
+                    />
+                  ))}
+                </div>
+                <input
+                  value={draft[s.value]?.note ?? ""}
+                  onChange={(e) => setNote(s.value, e.target.value)}
+                  placeholder="Add a note (optional)"
+                  className="mt-1.5 w-full rounded-lg border border-black/10 bg-transparent px-2 py-1 text-sm dark:border-white/10"
+                />
+              </div>
+            );
+          })}
+        </div>
+
+        <button
+          onClick={() => onSave(draft)}
+          className="mt-5 w-full rounded-xl bg-teal-600 px-4 py-2.5 font-medium text-white hover:bg-teal-700"
+        >
+          Save
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function OptionButton({
+  active,
+  label,
+  color,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  color: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="rounded-lg border px-2.5 py-1 text-sm transition"
+      style={
+        active
+          ? { background: color, borderColor: color, color: "white" }
+          : { borderColor: `${color}55`, color }
+      }
+    >
+      {label}
+    </button>
+  );
+}
