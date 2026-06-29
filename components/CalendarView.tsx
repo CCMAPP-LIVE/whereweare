@@ -1,9 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { SLOTS, STATUSES, STATUS_MAP } from "@/lib/constants";
-import { dayLabel } from "@/lib/time";
+import { dayLabel, shiftAnchor, viewRangeLabel, type CalView } from "@/lib/time";
 import type { Slot, Status } from "@/lib/types";
+import NewEventModal from "@/components/NewEventModal";
 
 export type EventLite = {
   id: string;
@@ -25,17 +27,27 @@ type Props = {
   people: { id: string; name: string }[];
   days: string[];
   today: string;
+  view: CalView;
+  anchor: string;
   availability: AvailabilityMap;
   times: TimesMap;
   events: EventsMap;
   calendarsConfigured: boolean;
 };
 
-export default function WeekView({
+const VIEWS: { value: CalView; label: string }[] = [
+  { value: "day", label: "Day" },
+  { value: "week", label: "Week" },
+  { value: "month", label: "Month" },
+];
+
+export default function CalendarView({
   currentUserId,
   people,
   days,
   today,
+  view,
+  anchor,
   availability,
   times,
   events,
@@ -44,6 +56,9 @@ export default function WeekView({
   const [avail, setAvail] = useState<AvailabilityMap>(availability);
   const [dayTimes, setDayTimes] = useState<TimesMap>(times);
   const [editing, setEditing] = useState<string | null>(null);
+  const [addingEvent, setAddingEvent] = useState(false);
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
 
   const orderedPeople = useMemo(() => {
     const me = people.find((p) => p.id === currentUserId);
@@ -51,11 +66,11 @@ export default function WeekView({
     return me ? [me, ...others] : people;
   }, [people, currentUserId]);
 
-  const weeks = useMemo(() => {
-    const chunks: string[][] = [];
-    for (let i = 0; i < days.length; i += 7) chunks.push(days.slice(i, i + 7));
-    return chunks;
-  }, [days]);
+  function navigate(nextView: CalView, nextAnchor: string) {
+    startTransition(() => {
+      router.push(`/?view=${nextView}&date=${nextAnchor}`);
+    });
+  }
 
   async function saveDay(day: string, slots: DaySlots, t: DayTimes) {
     const prevSlots = avail[currentUserId]?.[day] ?? {};
@@ -101,6 +116,14 @@ export default function WeekView({
 
   return (
     <main className="mx-auto w-full max-w-5xl flex-1 p-3 sm:p-5">
+      <Toolbar
+        view={view}
+        anchor={anchor}
+        today={today}
+        label={viewRangeLabel(view, anchor, days)}
+        onNavigate={navigate}
+        onNewEvent={() => setAddingEvent(true)}
+      />
       <Legend />
       {!calendarsConfigured && (
         <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
@@ -109,13 +132,20 @@ export default function WeekView({
         </p>
       )}
 
-      {weeks.map((week, wi) => (
-        <section key={wi} className="mb-6">
-          <h2 className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-neutral-400">
-            {wi === 0 ? "This week" : wi === 1 ? "Next week" : `Week ${wi + 1}`}
-          </h2>
+      <div className={pending ? "opacity-60 transition-opacity" : "transition-opacity"}>
+        {view === "month" ? (
+          <MonthGrid
+            days={days}
+            anchor={anchor}
+            today={today}
+            people={orderedPeople}
+            avail={avail}
+            events={events}
+            onPickDay={(day) => navigate("day", day)}
+          />
+        ) : (
           <div className="grid gap-2">
-            {week.map((day) => (
+            {days.map((day) => (
               <DayCard
                 key={day}
                 day={day}
@@ -129,8 +159,8 @@ export default function WeekView({
               />
             ))}
           </div>
-        </section>
-      ))}
+        )}
+      </div>
 
       {editing && (
         <DayEditor
@@ -143,7 +173,89 @@ export default function WeekView({
           onSave={(slots, t) => saveDay(editing, slots, t)}
         />
       )}
+
+      {addingEvent && (
+        <NewEventModal
+          defaultDate={view === "day" ? anchor : today >= days[0] && today <= days[days.length - 1] ? today : days[0]}
+          onClose={() => setAddingEvent(false)}
+          onCreated={() => router.refresh()}
+        />
+      )}
     </main>
+  );
+}
+
+function Toolbar({
+  view,
+  anchor,
+  today,
+  label,
+  onNavigate,
+  onNewEvent,
+}: {
+  view: CalView;
+  anchor: string;
+  today: string;
+  label: string;
+  onNavigate: (view: CalView, anchor: string) => void;
+  onNewEvent: () => void;
+}) {
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2">
+      <div className="flex items-center gap-1">
+        <button
+          aria-label="Previous"
+          onClick={() => onNavigate(view, shiftAnchor(view, anchor, -1))}
+          className="flex h-8 w-8 items-center justify-center rounded-lg border border-black/10 text-lg leading-none hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10"
+        >
+          ‹
+        </button>
+        <button
+          onClick={() => onNavigate(view, today)}
+          className="h-8 rounded-lg border border-black/10 px-3 text-sm hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10"
+        >
+          Today
+        </button>
+        <button
+          aria-label="Next"
+          onClick={() => onNavigate(view, shiftAnchor(view, anchor, 1))}
+          className="flex h-8 w-8 items-center justify-center rounded-lg border border-black/10 text-lg leading-none hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10"
+        >
+          ›
+        </button>
+      </div>
+
+      <h2 className="text-base font-semibold sm:text-lg">{label}</h2>
+
+      <div className="ml-auto flex items-center gap-2">
+        <button
+          onClick={onNewEvent}
+          className="flex h-8 items-center gap-1.5 rounded-lg bg-teal-600 px-3 text-sm font-medium text-white hover:bg-teal-700"
+        >
+          <span className="text-base leading-none">+</span>
+          <span>Add event</span>
+        </button>
+
+        <div className="inline-flex rounded-lg border border-black/10 p-0.5 dark:border-white/10">
+          {VIEWS.map((v) => {
+            const active = v.value === view;
+            return (
+              <button
+                key={v.value}
+                onClick={() => onNavigate(v.value, anchor)}
+                className={`rounded-md px-3 py-1 text-sm transition ${
+                  active
+                    ? "bg-teal-600 text-white"
+                    : "text-neutral-500 hover:bg-black/5 dark:hover:bg-white/10"
+                }`}
+              >
+                {v.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -287,6 +399,105 @@ function EventList({ items }: { items: EventLite[] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+function MonthGrid({
+  days,
+  anchor,
+  today,
+  people,
+  avail,
+  events,
+  onPickDay,
+}: {
+  days: string[];
+  anchor: string;
+  today: string;
+  people: { id: string; name: string }[];
+  avail: AvailabilityMap;
+  events: EventsMap;
+  onPickDay: (day: string) => void;
+}) {
+  const anchorMonth = anchor.slice(0, 7);
+  return (
+    <div>
+      <div className="mb-1 grid grid-cols-7 gap-1 px-0.5 text-center text-[11px] font-medium uppercase tracking-wide text-neutral-400">
+        {WEEKDAY_LABELS.map((d) => (
+          <div key={d}>{d}</div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {days.map((day) => {
+          const inMonth = day.slice(0, 7) === anchorMonth;
+          const isToday = day === today;
+          return (
+            <button
+              key={day}
+              onClick={() => onPickDay(day)}
+              className={`flex min-h-[68px] flex-col gap-1 rounded-lg border p-1 text-left transition hover:bg-black/5 dark:hover:bg-white/10 ${
+                isToday
+                  ? "border-teal-500 bg-teal-50/50 dark:bg-teal-950/20"
+                  : "border-black/10 dark:border-white/10"
+              } ${inMonth ? "" : "opacity-40"}`}
+            >
+              <span
+                className={`text-xs ${
+                  isToday ? "font-semibold text-teal-600" : "text-neutral-500"
+                }`}
+              >
+                {Number(day.slice(8, 10))}
+              </span>
+              <div className="flex flex-col gap-0.5">
+                {people.map((p) => {
+                  const hasEvents = (events[p.id]?.[day]?.length ?? 0) > 0;
+                  return (
+                    <div
+                      key={p.id}
+                      className="flex items-center gap-1"
+                      title={p.name}
+                    >
+                      <span className="w-2.5 shrink-0 text-[8px] font-medium uppercase text-neutral-400">
+                        {p.name.slice(0, 1)}
+                      </span>
+                      <SlotDots slots={avail[p.id]?.[day]} />
+                      {hasEvents && (
+                        <span className="ml-auto h-1 w-1 shrink-0 rounded-full bg-neutral-400" />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SlotDots({ slots }: { slots?: DaySlots }) {
+  return (
+    <div className="flex gap-0.5">
+      {SLOTS.map((s) => {
+        const status = slots?.[s.value]?.status;
+        const meta = status ? STATUS_MAP[status] : null;
+        return (
+          <span
+            key={s.value}
+            title={`${s.label}${meta ? `: ${meta.label}` : ""}`}
+            className="h-1.5 w-1.5 rounded-full"
+            style={
+              meta
+                ? { background: meta.color }
+                : { boxShadow: "inset 0 0 0 1px rgba(120,120,120,0.35)" }
+            }
+          />
+        );
+      })}
+    </div>
   );
 }
 

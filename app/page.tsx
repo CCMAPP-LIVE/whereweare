@@ -3,11 +3,18 @@ import { formatInTimeZone } from "date-fns-tz";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getEventsForUser } from "@/lib/calendars";
-import { londonToday, nextDay, visibleDays, visibleRange } from "@/lib/time";
+import {
+  daysForView,
+  londonToday,
+  nextDay,
+  normalizeAnchor,
+  normalizeView,
+  rangeOfDays,
+} from "@/lib/time";
 import { APP_TIMEZONE } from "@/lib/constants";
 import type { NormalizedEvent, Slot, Status } from "@/lib/types";
 import NavBar from "@/components/NavBar";
-import WeekView, { type EventLite } from "@/components/WeekView";
+import CalendarView, { type EventLite } from "@/components/CalendarView";
 
 export const dynamic = "force-dynamic";
 
@@ -34,17 +41,25 @@ function daysOf(ev: NormalizedEvent): string[] {
   return [ev.start.slice(0, 10)];
 }
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const days = visibleDays();
+  const sp = await searchParams;
+  const view = normalizeView(typeof sp.view === "string" ? sp.view : undefined);
+  const anchor = normalizeAnchor(typeof sp.date === "string" ? sp.date : undefined);
+
+  const days = daysForView(view, anchor);
   const firstDay = days[0];
   const lastDay = days[days.length - 1];
-  const { timeMin, timeMax } = visibleRange();
+  const { timeMin, timeMax } = rangeOfDays(days);
   const today = londonToday();
 
   const { data: profiles } = await supabase
@@ -131,11 +146,14 @@ export default async function Home() {
   return (
     <>
       <NavBar />
-      <WeekView
+      <CalendarView
+        key={`${view}:${anchor}`}
         currentUserId={user.id}
         people={people}
         days={days}
         today={today}
+        view={view}
+        anchor={anchor}
         availability={availability}
         times={times}
         events={events}
