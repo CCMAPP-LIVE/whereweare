@@ -528,6 +528,21 @@ function DayEditor({
       [slot]: { status: d[slot]?.status ?? null, note: note || null },
     }));
   }
+  function setAllDay(status: Status | null) {
+    setDraft((d) => {
+      const next: DaySlots = { ...d };
+      for (const { value: slot } of SLOTS) {
+        next[slot] = { status, note: d[slot]?.note ?? null };
+      }
+      return next;
+    });
+  }
+  const allDayStatus: Status | null | undefined = (() => {
+    const first = draft[SLOTS[0].value]?.status ?? null;
+    return SLOTS.every((s) => (draft[s.value]?.status ?? null) === first)
+      ? first
+      : undefined;
+  })();
 
   return (
     <div
@@ -548,6 +563,29 @@ function DayEditor({
         </div>
 
         <div className="space-y-4">
+          <div>
+            <div className="mb-1 text-xs font-medium uppercase text-neutral-400">
+              All day
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              <OptionButton
+                active={allDayStatus === null}
+                label="—"
+                color="#9ca3af"
+                onClick={() => setAllDay(null)}
+              />
+              {STATUSES.map((st) => (
+                <OptionButton
+                  key={st.value}
+                  active={allDayStatus === st.value}
+                  label={`${st.emoji} ${st.label}`}
+                  color={st.color}
+                  onClick={() => setAllDay(st.value)}
+                />
+              ))}
+            </div>
+            <div className="mt-2 border-t border-black/10 pt-3 dark:border-white/10" />
+          </div>
           {SLOTS.map((s) => {
             const cur = draft[s.value]?.status ?? null;
             return (
