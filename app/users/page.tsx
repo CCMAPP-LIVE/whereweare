@@ -8,6 +8,7 @@ import UserRow, { type ManagedUser } from "@/components/UserRow";
 import InviteForm from "@/components/InviteForm";
 import PendingInvites, { type PendingInvite } from "@/components/PendingInvites";
 import KidsManager, { type KidLite } from "@/components/KidsManager";
+import HelpersManager, { type HelperLite } from "@/components/HelpersManager";
 
 export const dynamic = "force-dynamic";
 
@@ -34,17 +35,26 @@ export default async function UsersPage() {
   let rows: ManagedUser[] = [];
   let configError = false;
   let kids: KidLite[] = [];
+  let helpers: HelperLite[] = [];
   try {
     const admin = createAdminClient();
-    const [{ data: list }, { data: profiles }, { data: accounts }, { data: subs }, { data: kidRows }] =
-      await Promise.all([
-        admin.auth.admin.listUsers(),
-        admin.from("profiles").select("id, display_name"),
-        admin.from("calendar_accounts").select("user_id, provider"),
-        admin.from("push_subscriptions").select("user_id"),
-        admin.from("kids").select("id, name").order("sort_order", { ascending: true }),
-      ]);
+    const [
+      { data: list },
+      { data: profiles },
+      { data: accounts },
+      { data: subs },
+      { data: kidRows },
+      { data: helperRows },
+    ] = await Promise.all([
+      admin.auth.admin.listUsers(),
+      admin.from("profiles").select("id, display_name"),
+      admin.from("calendar_accounts").select("user_id, provider"),
+      admin.from("push_subscriptions").select("user_id"),
+      admin.from("kids").select("id, name").order("sort_order", { ascending: true }),
+      admin.from("helpers").select("id, name").order("sort_order", { ascending: true }),
+    ]);
     kids = (kidRows ?? []).map((k) => ({ id: k.id, name: k.name }));
+    helpers = (helperRows ?? []).map((h) => ({ id: h.id, name: h.name }));
 
     const nameMap = new Map((profiles ?? []).map((p) => [p.id, p.display_name]));
     const provMap = new Map<string, Set<string>>();
@@ -116,6 +126,16 @@ export default async function UsersPage() {
                 of events (e.g. Bernie for school drop-off).
               </p>
               <KidsManager initialKids={kids} />
+            </section>
+
+            <section className="rounded-2xl border border-black/10 p-4 dark:border-white/10">
+              <h2 className="font-semibold">Helpers</h2>
+              <p className="mb-3 mt-0.5 text-sm text-neutral-500">
+                Caregivers who do drop-offs / pickups but aren't app users
+                (e.g. Joy the nanny). They show up in the "Who's doing it"
+                dropdown alongside app users.
+              </p>
+              <HelpersManager initialHelpers={helpers} />
             </section>
           </>
         )}

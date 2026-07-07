@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { dayLabel, shiftAnchor } from "@/lib/time";
-import DayComments from "@/components/DayComments";
+import DayCommentsModal from "@/components/DayCommentsModal";
 
 export type WeekEvent = {
   id: string;
@@ -368,34 +368,13 @@ export default function PlanView({
       )}
 
       {commentsDay && (
-        <div
-          className="fixed inset-0 z-30 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
-          onClick={() => setCommentsDay(null)}
-        >
-          <div
-            className="pb-safe max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-4 shadow-xl dark:bg-neutral-900 sm:rounded-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="font-semibold">
-                {dayLabel(commentsDay).weekday}{" "}
-                <span className="text-neutral-400">{dayLabel(commentsDay).date}</span>
-              </h3>
-              <button
-                onClick={() => setCommentsDay(null)}
-                className="text-sm text-neutral-400"
-              >
-                Close
-              </button>
-            </div>
-            <DayComments
-              day={commentsDay}
-              currentUserId={currentUserId}
-              names={names}
-              onRead={markDayRead}
-            />
-          </div>
-        </div>
+        <DayCommentsModal
+          day={commentsDay}
+          currentUserId={currentUserId}
+          names={names}
+          onClose={() => setCommentsDay(null)}
+          onRead={markDayRead}
+        />
       )}
     </main>
   );

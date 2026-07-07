@@ -24,6 +24,8 @@ export async function PUT(request: Request, { params }: Params) {
     typeof body.assigneeUserId === "string" && body.assigneeUserId !== ""
       ? body.assigneeUserId
       : null;
+  const helperId: string | null =
+    typeof body.helperId === "string" && body.helperId !== "" ? body.helperId : null;
   const notes: string | null =
     typeof body.notes === "string" ? body.notes.trim().slice(0, 2000) || null : null;
 
@@ -43,7 +45,8 @@ export async function PUT(request: Request, { params }: Params) {
     .from("school_events")
     .update({
       time,
-      assignee_user_id: assigneeUserId,
+      assignee_user_id: helperId ? null : assigneeUserId,
+      helper_id: helperId,
       notes,
       updated_at: new Date().toISOString(),
     })
@@ -51,23 +54,29 @@ export async function PUT(request: Request, { params }: Params) {
   if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 });
 
   try {
-    const [{ data: kidRow }, { data: assigneeRow }] = await Promise.all([
-      admin.from("kids").select("name").eq("id", existing.kid_id).maybeSingle(),
-      assigneeUserId
-        ? admin
-            .from("profiles")
-            .select("display_name")
-            .eq("id", assigneeUserId)
-            .maybeSingle()
-        : Promise.resolve({ data: null }),
-    ]);
+    const [{ data: kidRow }, { data: assigneeRow }, { data: helperRow }] =
+      await Promise.all([
+        admin.from("kids").select("name").eq("id", existing.kid_id).maybeSingle(),
+        !helperId && assigneeUserId
+          ? admin
+              .from("profiles")
+              .select("display_name")
+              .eq("id", assigneeUserId)
+              .maybeSingle()
+          : Promise.resolve({ data: null }),
+        helperId
+          ? admin.from("helpers").select("name").eq("id", helperId).maybeSingle()
+          : Promise.resolve({ data: null }),
+      ]);
+    const assigneeName =
+      helperRow?.name ?? assigneeRow?.display_name ?? null;
     const newGoogleEventId = await upsertSchoolEventOnLifeCalendar({
       id,
       day: existing.day,
       kind: existing.kind as "drop" | "pickup",
       time,
       kidName: kidRow?.name ?? "Kid",
-      assigneeName: assigneeRow?.display_name ?? null,
+      assigneeName,
       notes,
       googleEventId: existing.google_event_id,
     });

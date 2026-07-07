@@ -24,6 +24,8 @@ export async function PUT(request: Request) {
     typeof body.assigneeUserId === "string" && body.assigneeUserId !== ""
       ? body.assigneeUserId
       : null;
+  const helperId: string | null =
+    typeof body.helperId === "string" && body.helperId !== "" ? body.helperId : null;
   const active = body.active !== false;
 
   if (!kidId) return NextResponse.json({ error: "kidId required" }, { status: 400 });
@@ -41,7 +43,11 @@ export async function PUT(request: Request) {
       weekday,
       kind,
       time,
-      default_assignee_user_id: assigneeUserId,
+      // Client sends one side or the other; the other is nulled so we can
+      // switch back and forth between "Ashley does it" and "Joy does it"
+      // without stray leftover assignments.
+      default_assignee_user_id: helperId ? null : assigneeUserId,
+      helper_id: helperId,
       active,
       updated_at: new Date().toISOString(),
     },

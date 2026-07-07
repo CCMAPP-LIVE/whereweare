@@ -6,7 +6,7 @@ import { SLOTS, STATUSES, STATUS_MAP } from "@/lib/constants";
 import { dayLabel, shiftAnchor, viewRangeLabel, type CalView } from "@/lib/time";
 import type { Slot, Status } from "@/lib/types";
 import NewEventModal from "@/components/NewEventModal";
-import DayComments from "@/components/DayComments";
+import DayCommentsModal from "@/components/DayCommentsModal";
 
 export type EventLite = {
   id: string;
@@ -60,6 +60,7 @@ export default function CalendarView({
   const [avail, setAvail] = useState<AvailabilityMap>(availability);
   const [dayTimes, setDayTimes] = useState<TimesMap>(times);
   const [editing, setEditing] = useState<string | null>(null);
+  const [commentsDay, setCommentsDay] = useState<string | null>(null);
   const [addingEvent, setAddingEvent] = useState(false);
   const [unread, setUnread] = useState<Record<string, number>>(unreadByDay);
   const router = useRouter();
@@ -210,6 +211,7 @@ export default function CalendarView({
                 events={events}
                 unreadCount={unread[day] ?? 0}
                 onEdit={() => setEditing(day)}
+                onComment={() => setCommentsDay(day)}
                 onCycleSlot={(slot) => cycleSlot(day, slot)}
               />
             ))}
@@ -224,11 +226,18 @@ export default function CalendarView({
           initialTimes={
             dayTimes[currentUserId]?.[editing] ?? { leave: null, return: null }
           }
-          currentUserId={currentUserId}
-          names={names}
           onClose={() => setEditing(null)}
           onSave={(slots, t) => saveDay(editing, slots, t)}
-          onCommentsRead={markDayRead}
+        />
+      )}
+
+      {commentsDay && (
+        <DayCommentsModal
+          day={commentsDay}
+          currentUserId={currentUserId}
+          names={names}
+          onClose={() => setCommentsDay(null)}
+          onRead={markDayRead}
         />
       )}
 
@@ -385,6 +394,7 @@ function DayCard({
   events,
   unreadCount,
   onEdit,
+  onComment,
   onCycleSlot,
 }: {
   day: string;
@@ -396,6 +406,7 @@ function DayCard({
   events: EventsMap;
   unreadCount: number;
   onEdit: () => void;
+  onComment: () => void;
   onCycleSlot: (slot: Slot) => void;
 }) {
   const { weekday, date } = dayLabel(day);
@@ -417,20 +428,24 @@ function DayCard({
             </span>
           )}
         </div>
-        {/* Details/Notes button — bigger tap target than the old text link, and
-            only surfaces the sheet when you need notes or out/back times. */}
-        <button
-          onClick={onEdit}
-          aria-label="Edit day details"
-          className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/30"
-        >
-          {unreadCount > 0 && (
-            <span className="rounded-full bg-teal-600 px-1.5 py-0.5 text-[10px] font-medium text-white">
-              💬 {unreadCount}
-            </span>
-          )}
-          Notes …
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={onComment}
+            aria-label="Comment on this day"
+            className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/30"
+          >
+            💬{unreadCount > 0 && ` ${unreadCount}`}
+          </button>
+          {/* Details/Notes button — bigger tap target than the old text link, and
+              only surfaces the sheet when you need notes or out/back times. */}
+          <button
+            onClick={onEdit}
+            aria-label="Edit day details"
+            className="rounded-lg px-2 py-1 text-xs text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/30"
+          >
+            Notes …
+          </button>
+        </div>
       </div>
 
       {/* One row per person on phones: [name] [AM] [PM] [EVE]. Two-column
@@ -681,20 +696,14 @@ function DayEditor({
   day,
   initialSlots,
   initialTimes,
-  currentUserId,
-  names,
   onClose,
   onSave,
-  onCommentsRead,
 }: {
   day: string;
   initialSlots: DaySlots;
   initialTimes: DayTimes;
-  currentUserId: string;
-  names: Record<string, string>;
   onClose: () => void;
   onSave: (slots: DaySlots, times: DayTimes) => void;
-  onCommentsRead: (day: string) => void;
 }) {
   const [draft, setDraft] = useState<DaySlots>(() => ({ ...initialSlots }));
   const [leave, setLeave] = useState<string>(initialTimes.leave ?? "");
@@ -837,15 +846,6 @@ function DayEditor({
         >
           Save
         </button>
-
-        <div className="mt-4">
-          <DayComments
-            day={day}
-            currentUserId={currentUserId}
-            names={names}
-            onRead={onCommentsRead}
-          />
-        </div>
       </div>
     </div>
   );

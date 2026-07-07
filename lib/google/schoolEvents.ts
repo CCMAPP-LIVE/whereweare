@@ -14,6 +14,12 @@ export type SchoolEventForSync = {
   kind: "drop" | "pickup";
   time: string; // "HH:mm"
   kidName: string;
+  /**
+   * Resolved name of whoever's doing the drop/pickup — could be an app user
+   * (assignee_user_id → profiles.display_name) or a non-user helper like Joy
+   * (helper_id → helpers.name). Callers pick which and pass the resolved
+   * name; the sync helper doesn't care which side it came from.
+   */
   assigneeName: string | null;
   notes: string | null;
   googleEventId: string | null;

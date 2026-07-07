@@ -189,6 +189,27 @@ export type Database = {
           },
         ]
       }
+      helpers: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
       invites: {
         Row: {
           code: string
@@ -399,6 +420,7 @@ export type Database = {
           active: boolean
           created_at: string
           default_assignee_user_id: string | null
+          helper_id: string | null
           kid_id: string
           kind: string
           time: string
@@ -409,6 +431,7 @@ export type Database = {
           active?: boolean
           created_at?: string
           default_assignee_user_id?: string | null
+          helper_id?: string | null
           kid_id: string
           kind: string
           time: string
@@ -419,6 +442,7 @@ export type Database = {
           active?: boolean
           created_at?: string
           default_assignee_user_id?: string | null
+          helper_id?: string | null
           kid_id?: string
           kind?: string
           time?: string
@@ -426,6 +450,13 @@ export type Database = {
           weekday?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "school_defaults_helper_id_fkey"
+            columns: ["helper_id"]
+            isOneToOne: false
+            referencedRelation: "helpers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "school_defaults_kid_id_fkey"
             columns: ["kid_id"]
@@ -442,6 +473,7 @@ export type Database = {
           created_by: string | null
           day: string
           google_event_id: string | null
+          helper_id: string | null
           id: string
           kid_id: string
           kind: string
@@ -455,6 +487,7 @@ export type Database = {
           created_by?: string | null
           day: string
           google_event_id?: string | null
+          helper_id?: string | null
           id?: string
           kid_id: string
           kind: string
@@ -468,6 +501,7 @@ export type Database = {
           created_by?: string | null
           day?: string
           google_event_id?: string | null
+          helper_id?: string | null
           id?: string
           kid_id?: string
           kind?: string
@@ -476,6 +510,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "school_events_helper_id_fkey"
+            columns: ["helper_id"]
+            isOneToOne: false
+            referencedRelation: "helpers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "school_events_kid_id_fkey"
             columns: ["kid_id"]
@@ -513,6 +554,7 @@ export type Database = {
           day: string
           end_time: string | null
           google_event_id: string | null
+          helper_id: string | null
           id: string
           kid_ids: string[]
           notes: string | null
@@ -527,6 +569,7 @@ export type Database = {
           day: string
           end_time?: string | null
           google_event_id?: string | null
+          helper_id?: string | null
           id?: string
           kid_ids?: string[]
           notes?: string | null
@@ -541,6 +584,7 @@ export type Database = {
           day?: string
           end_time?: string | null
           google_event_id?: string | null
+          helper_id?: string | null
           id?: string
           kid_ids?: string[]
           notes?: string | null
@@ -549,7 +593,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "week_events_helper_id_fkey"
+            columns: ["helper_id"]
+            isOneToOne: false
+            referencedRelation: "helpers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       week_notes: {
         Row: {

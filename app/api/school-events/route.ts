@@ -22,6 +22,8 @@ export async function POST(request: Request) {
     typeof body.assigneeUserId === "string" && body.assigneeUserId !== ""
       ? body.assigneeUserId
       : null;
+  const helperId: string | null =
+    typeof body.helperId === "string" && body.helperId !== "" ? body.helperId : null;
   const notes: string | null =
     typeof body.notes === "string" ? body.notes.trim().slice(0, 2000) || null : null;
 
@@ -42,7 +44,8 @@ export async function POST(request: Request) {
       day,
       kind,
       time,
-      assignee_user_id: assigneeUserId,
+      assignee_user_id: helperId ? null : assigneeUserId,
+      helper_id: helperId,
       notes,
       created_by: user.id,
     })
@@ -52,23 +55,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error?.message ?? "insert failed" }, { status: 500 });
 
   try {
-    const [{ data: kidRow }, { data: assigneeRow }] = await Promise.all([
-      admin.from("kids").select("name").eq("id", kidId).maybeSingle(),
-      assigneeUserId
-        ? admin
-            .from("profiles")
-            .select("display_name")
-            .eq("id", assigneeUserId)
-            .maybeSingle()
-        : Promise.resolve({ data: null }),
-    ]);
+    const [{ data: kidRow }, { data: assigneeRow }, { data: helperRow }] =
+      await Promise.all([
+        admin.from("kids").select("name").eq("id", kidId).maybeSingle(),
+        !helperId && assigneeUserId
+          ? admin
+              .from("profiles")
+              .select("display_name")
+              .eq("id", assigneeUserId)
+              .maybeSingle()
+          : Promise.resolve({ data: null }),
+        helperId
+          ? admin.from("helpers").select("name").eq("id", helperId).maybeSingle()
+          : Promise.resolve({ data: null }),
+      ]);
+    const assigneeName =
+      helperRow?.name ?? assigneeRow?.display_name ?? null;
     const googleEventId = await upsertSchoolEventOnLifeCalendar({
       id: inserted.id,
       day,
       kind,
       time,
       kidName: kidRow?.name ?? "Kid",
-      assigneeName: assigneeRow?.display_name ?? null,
+      assigneeName,
       notes,
       googleEventId: null,
     });

@@ -11,6 +11,7 @@ import NavBar from "@/components/NavBar";
 import SchoolView, {
   type SchoolDefault,
   type SchoolEvent,
+  type Helper,
 } from "@/components/SchoolView";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +39,7 @@ export default async function SchoolPage({
   const [
     { data: profiles },
     { data: kidRows },
+    { data: helperRows },
     { data: eventRows },
     { data: defaultRows },
     { data: weekRow },
@@ -51,16 +53,22 @@ export default async function SchoolPage({
       .select("id, name")
       .order("sort_order", { ascending: true }),
     supabase
+      .from("helpers")
+      .select("id, name")
+      .order("sort_order", { ascending: true }),
+    supabase
       .from("school_events")
       .select(
-        "id, kid_id, day, kind, time, assignee_user_id, notes, google_event_id, updated_at",
+        "id, kid_id, day, kind, time, assignee_user_id, helper_id, notes, google_event_id, updated_at",
       )
       .gte("day", firstDay)
       .lte("day", lastDay)
       .order("time", { ascending: true }),
     supabase
       .from("school_defaults")
-      .select("kid_id, weekday, kind, time, default_assignee_user_id, active"),
+      .select(
+        "kid_id, weekday, kind, time, default_assignee_user_id, helper_id, active",
+      ),
     supabase
       .from("school_weeks")
       .select("is_school_week, notes")
@@ -73,6 +81,10 @@ export default async function SchoolPage({
     name: p.display_name?.trim() || "Someone",
   }));
   const kids = (kidRows ?? []).map((k) => ({ id: k.id, name: k.name }));
+  const helpers: Helper[] = (helperRows ?? []).map((h) => ({
+    id: h.id,
+    name: h.name,
+  }));
 
   const events: SchoolEvent[] = (eventRows ?? []).map((r) => ({
     id: r.id,
@@ -81,6 +93,7 @@ export default async function SchoolPage({
     kind: r.kind as "drop" | "pickup",
     time: r.time.slice(0, 5),
     assigneeUserId: r.assignee_user_id,
+    helperId: r.helper_id,
     notes: r.notes,
   }));
 
@@ -90,6 +103,7 @@ export default async function SchoolPage({
     kind: d.kind as "drop" | "pickup",
     time: d.time.slice(0, 5),
     defaultAssigneeUserId: d.default_assignee_user_id,
+    helperId: d.helper_id,
     active: d.active,
   }));
 
@@ -108,6 +122,7 @@ export default async function SchoolPage({
         currentUserId={user.id}
         people={people}
         kids={kids}
+        helpers={helpers}
         anchor={anchor}
         today={today}
         weekStart={weekStart}

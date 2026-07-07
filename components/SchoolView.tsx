@@ -11,6 +11,7 @@ export type SchoolEvent = {
   kind: "drop" | "pickup";
   time: string; // "HH:mm"
   assigneeUserId: string | null;
+  helperId: string | null;
   notes: string | null;
 };
 
@@ -20,8 +21,11 @@ export type SchoolDefault = {
   kind: "drop" | "pickup";
   time: string; // "HH:mm"
   defaultAssigneeUserId: string | null;
+  helperId: string | null;
   active: boolean;
 };
+
+export type Helper = { id: string; name: string };
 
 type Person = { id: string; name: string };
 type Kid = { id: string; name: string };
@@ -39,6 +43,7 @@ type Props = {
   currentUserId: string;
   people: Person[];
   kids: Kid[];
+  helpers: Helper[];
   anchor: string;
   today: string;
   weekStart: string;
@@ -52,6 +57,7 @@ type Props = {
 export default function SchoolView({
   people,
   kids,
+  helpers,
   anchor,
   today,
   weekStart,
@@ -75,6 +81,11 @@ export default function SchoolView({
     const map = new Map(people.map((p) => [p.id, p.name] as const));
     return (id: string | null) => (id ? map.get(id) ?? null : null);
   }, [people]);
+
+  const helperNameOf = useMemo(() => {
+    const map = new Map(helpers.map((h) => [h.id, h.name] as const));
+    return (id: string | null) => (id ? map.get(id) ?? null : null);
+  }, [helpers]);
 
   const kidNameOf = useMemo(() => {
     const map = new Map(kids.map((k) => [k.id, k.name] as const));
@@ -133,22 +144,28 @@ export default function SchoolView({
 
   async function updateEvent(
     id: string,
-    patch: Partial<Pick<SchoolEvent, "time" | "assigneeUserId" | "notes">>,
+    patch: Partial<
+      Pick<SchoolEvent, "time" | "assigneeUserId" | "helperId" | "notes">
+    >,
   ) {
     setEvents((cur) =>
       cur.map((e) => (e.id === id ? { ...e, ...patch } : e)),
     );
     const existing = events.find((e) => e.id === id);
     if (!existing) return;
+    const nextAssigneeUserId =
+      patch.assigneeUserId !== undefined
+        ? patch.assigneeUserId
+        : existing.assigneeUserId;
+    const nextHelperId =
+      patch.helperId !== undefined ? patch.helperId : existing.helperId;
     await fetch(`/api/school-events/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         time: patch.time ?? existing.time,
-        assigneeUserId:
-          patch.assigneeUserId !== undefined
-            ? patch.assigneeUserId
-            : existing.assigneeUserId,
+        assigneeUserId: nextHelperId ? null : nextAssigneeUserId,
+        helperId: nextHelperId,
         notes: patch.notes !== undefined ? patch.notes : existing.notes,
       }),
     });
@@ -196,7 +213,8 @@ export default function SchoolView({
         weekday: patch.weekday,
         kind: patch.kind,
         time: patch.time,
-        assigneeUserId: patch.defaultAssigneeUserId,
+        assigneeUserId: patch.helperId ? null : patch.defaultAssigneeUserId,
+        helperId: patch.helperId,
         active: patch.active,
       }),
     });
@@ -324,7 +342,10 @@ export default function SchoolView({
                       ev={ev}
                       kidName={kidNameOf(ev.kidId)}
                       people={people}
-                      assigneeName={nameOf(ev.assigneeUserId)}
+                      helpers={helpers}
+                      assigneeName={
+                        nameOf(ev.assigneeUserId) ?? helperNameOf(ev.helperId)
+                      }
                       onUpdate={(patch) => updateEvent(ev.id, patch)}
                       onDelete={() => deleteEvent(ev.id)}
                     />
@@ -354,6 +375,7 @@ export default function SchoolView({
               <DefaultsGrid
                 kids={kids}
                 people={people}
+                helpers={helpers}
                 defaults={defaults}
                 onUpsert={upsertDefault}
                 onDelete={deleteDefault}
@@ -366,10 +388,78 @@ export default function SchoolView({
   );
 }
 
+/**
+ * Encode the current (assignee | helper) selection as a single dropdown value
+ * so the combined dropdown can offer both groups. Empty string = "by …".
+ */
+function encodeAssignee(
+  assigneeUserId: string | null,
+  helperId: string | null,
+): string {
+  if (helperId) return `helper:${helperId}`;
+  if (assigneeUserId) return `user:${assigneeUserId}`;
+  return "";
+}
+
+function decodeAssignee(value: string): {
+  assigneeUserId: string | null;
+  helperId: string | null;
+} {
+  if (value.startsWith("helper:")) return { assigneeUserId: null, helperId: value.slice(7) };
+  if (value.startsWith("user:")) return { assigneeUserId: value.slice(5), helperId: null };
+  return { assigneeUserId: null, helperId: null };
+}
+
+function AssigneeSelect({
+  value,
+  onChange,
+  people,
+  helpers,
+  className,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  people: Person[];
+  helpers: Helper[];
+  className?: string;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={
+        className ??
+        "rounded-md bg-transparent px-1 py-0.5 text-xs text-neutral-500 focus:bg-white dark:focus:bg-neutral-800"
+      }
+    >
+      <option value="">by …</option>
+      {people.length > 0 && (
+        <optgroup label="People">
+          {people.map((p) => (
+            <option key={p.id} value={`user:${p.id}`}>
+              {p.name}
+            </option>
+          ))}
+        </optgroup>
+      )}
+      {helpers.length > 0 && (
+        <optgroup label="Helpers">
+          {helpers.map((h) => (
+            <option key={h.id} value={`helper:${h.id}`}>
+              {h.name}
+            </option>
+          ))}
+        </optgroup>
+      )}
+    </select>
+  );
+}
+
 function SchoolRow({
   ev,
   kidName,
   people,
+  helpers,
   assigneeName,
   onUpdate,
   onDelete,
@@ -377,8 +467,13 @@ function SchoolRow({
   ev: SchoolEvent;
   kidName: string;
   people: Person[];
+  helpers: Helper[];
   assigneeName: string | null;
-  onUpdate: (patch: Partial<Pick<SchoolEvent, "time" | "assigneeUserId" | "notes">>) => void;
+  onUpdate: (
+    patch: Partial<
+      Pick<SchoolEvent, "time" | "assigneeUserId" | "helperId" | "notes">
+    >,
+  ) => void;
   onDelete: () => void;
 }) {
   return (
@@ -393,18 +488,12 @@ function SchoolRow({
         {kidName}
       </span>
       <span className="font-medium">{KIND_LABEL[ev.kind]}</span>
-      <select
-        value={ev.assigneeUserId ?? ""}
-        onChange={(e) => onUpdate({ assigneeUserId: e.target.value || null })}
-        className="rounded-md bg-transparent px-1 py-0.5 text-xs text-neutral-500 focus:bg-white dark:focus:bg-neutral-800"
-      >
-        <option value="">by …</option>
-        {people.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.name}
-          </option>
-        ))}
-      </select>
+      <AssigneeSelect
+        value={encodeAssignee(ev.assigneeUserId, ev.helperId)}
+        onChange={(v) => onUpdate(decodeAssignee(v))}
+        people={people}
+        helpers={helpers}
+      />
       {assigneeName && (
         <span className="rounded-full bg-white/60 px-1.5 py-0.5 text-[10px] text-neutral-600 dark:bg-white/10 dark:text-neutral-300">
           by {assigneeName}
@@ -423,12 +512,14 @@ function SchoolRow({
 function DefaultsGrid({
   kids,
   people,
+  helpers,
   defaults,
   onUpsert,
   onDelete,
 }: {
   kids: Kid[];
   people: Person[];
+  helpers: Helper[];
   defaults: SchoolDefault[];
   onUpsert: (d: SchoolDefault) => void;
   onDelete: (kidId: string, weekday: number, kind: "drop" | "pickup") => void;
@@ -447,10 +538,14 @@ function DefaultsGrid({
     return times.every((t) => t === times[0]) ? times[0] : "";
   }
   function bothAssignee(weekday: number, kind: "drop" | "pickup"): string {
-    const assigns = kids.map(
-      (k) => map.get(`${k.id}|${weekday}|${kind}`)?.defaultAssigneeUserId ?? "",
-    );
-    return assigns.every((a) => a === assigns[0]) ? assigns[0] : "";
+    // Combine both possible sources into a single prefixed value so we can
+    // detect when all kids share the same doer (whether user or helper).
+    const encoded = kids.map((k) => {
+      const d = map.get(`${k.id}|${weekday}|${kind}`);
+      if (!d) return "";
+      return encodeAssignee(d.defaultAssigneeUserId, d.helperId);
+    });
+    return encoded.every((v) => v === encoded[0]) ? encoded[0] : "";
   }
   function bothPresent(weekday: number, kind: "drop" | "pickup"): boolean {
     return kids.every((k) => map.has(`${k.id}|${weekday}|${kind}`));
@@ -465,6 +560,7 @@ function DefaultsGrid({
         kind,
         time,
         defaultAssigneeUserId: d?.defaultAssigneeUserId ?? null,
+        helperId: d?.helperId ?? null,
         active: true,
       });
     }
@@ -472,8 +568,9 @@ function DefaultsGrid({
   function setBothAssignee(
     weekday: number,
     kind: "drop" | "pickup",
-    assignee: string | null,
+    encoded: string,
   ) {
+    const { assigneeUserId, helperId } = decodeAssignee(encoded);
     for (const kid of kids) {
       const d = map.get(`${kid.id}|${weekday}|${kind}`);
       onUpsert({
@@ -481,7 +578,8 @@ function DefaultsGrid({
         weekday,
         kind,
         time: d?.time ?? "08:00",
-        defaultAssigneeUserId: assignee,
+        defaultAssigneeUserId: assigneeUserId,
+        helperId,
         active: true,
       });
     }
@@ -527,20 +625,13 @@ function DefaultsGrid({
                             onChange={(e) => setBothTime(weekday, kind, e.target.value)}
                             className="w-[5.5rem] rounded-md bg-transparent px-1 py-0.5 text-neutral-700 focus:bg-white dark:text-neutral-200 dark:focus:bg-neutral-800"
                           />
-                          <select
+                          <AssigneeSelect
                             value={bothAssignee(weekday, kind)}
-                            onChange={(e) =>
-                              setBothAssignee(weekday, kind, e.target.value || null)
-                            }
+                            onChange={(v) => setBothAssignee(weekday, kind, v)}
+                            people={people}
+                            helpers={helpers}
                             className="rounded-md bg-transparent px-1 py-0.5 text-neutral-500 focus:bg-white dark:focus:bg-neutral-800"
-                          >
-                            <option value="">by …</option>
-                            {people.map((p) => (
-                              <option key={p.id} value={p.id}>
-                                {p.name}
-                              </option>
-                            ))}
-                          </select>
+                          />
                           {bothPresent(weekday, kind) && (
                             <button
                               onClick={() => clearBoth(weekday, kind)}
@@ -595,32 +686,33 @@ function DefaultsGrid({
                                   time: e.target.value,
                                   defaultAssigneeUserId:
                                     d?.defaultAssigneeUserId ?? null,
+                                  helperId: d?.helperId ?? null,
                                   active: true,
                                 })
                               }
                               className="w-[5.5rem] rounded-md bg-transparent px-1 py-0.5 text-neutral-700 focus:bg-white dark:text-neutral-200 dark:focus:bg-neutral-800"
                             />
-                            <select
-                              value={d?.defaultAssigneeUserId ?? ""}
-                              onChange={(e) =>
+                            <AssigneeSelect
+                              value={encodeAssignee(
+                                d?.defaultAssigneeUserId ?? null,
+                                d?.helperId ?? null,
+                              )}
+                              onChange={(v) => {
+                                const { assigneeUserId, helperId } = decodeAssignee(v);
                                 onUpsert({
                                   kidId: kid.id,
                                   weekday,
                                   kind,
                                   time: d?.time ?? "08:00",
-                                  defaultAssigneeUserId: e.target.value || null,
+                                  defaultAssigneeUserId: assigneeUserId,
+                                  helperId,
                                   active: true,
-                                })
-                              }
+                                });
+                              }}
+                              people={people}
+                              helpers={helpers}
                               className="rounded-md bg-transparent px-1 py-0.5 text-neutral-500 focus:bg-white dark:focus:bg-neutral-800"
-                            >
-                              <option value="">by …</option>
-                              {people.map((p) => (
-                                <option key={p.id} value={p.id}>
-                                  {p.name}
-                                </option>
-                              ))}
-                            </select>
+                            />
                             {d && (
                               <button
                                 onClick={() => onDelete(kid.id, weekday, kind)}

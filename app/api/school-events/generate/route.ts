@@ -28,7 +28,9 @@ export async function POST(request: Request) {
 
   const { data: defaults, error: defErr } = await admin
     .from("school_defaults")
-    .select("kid_id, weekday, kind, time, default_assignee_user_id, active");
+    .select(
+      "kid_id, weekday, kind, time, default_assignee_user_id, helper_id, active",
+    );
   if (defErr) return NextResponse.json({ error: defErr.message }, { status: 500 });
   const activeDefaults = (defaults ?? []).filter((d) => d.active);
 
@@ -41,7 +43,8 @@ export async function POST(request: Request) {
     day: format(addDays(monday, d.weekday), "yyyy-MM-dd"),
     kind: d.kind,
     time: d.time,
-    assignee_user_id: d.default_assignee_user_id,
+    assignee_user_id: d.helper_id ? null : d.default_assignee_user_id,
+    helper_id: d.helper_id,
     created_by: user.id,
   }));
 
@@ -65,7 +68,7 @@ export async function POST(request: Request) {
   const { data: inserted, error: insErr } = await admin
     .from("school_events")
     .insert(toInsert)
-    .select("id, kid_id, day, kind, time, assignee_user_id, notes");
+    .select("id, kid_id, day, kind, time, assignee_user_id, helper_id, notes");
   if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
 
   // Resolve names once, then push to Life Calendar.
@@ -77,33 +80,48 @@ export async function POST(request: Request) {
         .filter((x): x is string => !!x),
     ),
   ];
+  const helperIds = [
+    ...new Set(
+      (inserted ?? [])
+        .map((r) => r.helper_id)
+        .filter((x): x is string => !!x),
+    ),
+  ];
 
-  const [{ data: kidRows }, { data: profileRows }] = await Promise.all([
-    kidIds.length
-      ? admin.from("kids").select("id, name").in("id", kidIds)
-      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
-    assigneeIds.length
-      ? admin.from("profiles").select("id, display_name").in("id", assigneeIds)
-      : Promise.resolve({ data: [] as { id: string; display_name: string | null }[] }),
-  ]);
+  const [{ data: kidRows }, { data: profileRows }, { data: helperRows }] =
+    await Promise.all([
+      kidIds.length
+        ? admin.from("kids").select("id, name").in("id", kidIds)
+        : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+      assigneeIds.length
+        ? admin.from("profiles").select("id, display_name").in("id", assigneeIds)
+        : Promise.resolve({ data: [] as { id: string; display_name: string | null }[] }),
+      helperIds.length
+        ? admin.from("helpers").select("id, name").in("id", helperIds)
+        : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    ]);
   const kidName = new Map((kidRows ?? []).map((k) => [k.id, k.name]));
   const assigneeName = new Map(
     (profileRows ?? []).map((p) => [p.id, p.display_name ?? "Someone"]),
   );
+  const helperName = new Map((helperRows ?? []).map((h) => [h.id, h.name]));
 
   let syncFailures = 0;
   await Promise.all(
     (inserted ?? []).map(async (r) => {
       try {
+        const resolvedAssigneeName = r.helper_id
+          ? helperName.get(r.helper_id) ?? null
+          : r.assignee_user_id
+            ? assigneeName.get(r.assignee_user_id) ?? null
+            : null;
         const googleEventId = await upsertSchoolEventOnLifeCalendar({
           id: r.id,
           day: r.day,
           kind: r.kind as "drop" | "pickup",
           time: r.time.slice(0, 5),
           kidName: kidName.get(r.kid_id) ?? "Kid",
-          assigneeName: r.assignee_user_id
-            ? assigneeName.get(r.assignee_user_id) ?? null
-            : null,
+          assigneeName: resolvedAssigneeName,
           notes: r.notes,
           googleEventId: null,
         });
