@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
+import { addDays, format, parseISO } from "date-fns";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushToUser } from "@/lib/push/send";
-import { isLondonHour } from "@/lib/time";
+import { isLondonHour, londonToday, weekStartOf } from "@/lib/time";
 
 /**
  * Weekly "update where you'll be" reminder.
@@ -30,10 +31,17 @@ export async function GET(request: Request) {
   const admin = createAdminClient();
   const { data: profiles } = await admin.from("profiles").select("id");
 
+  // Point people at NEXT week's /school so tapping the notification opens
+  // straight into the routine they need to plan (or mark as no-school).
+  const nextMonday = format(
+    addDays(parseISO(`${weekStartOf(londonToday())}T12:00:00`), 7),
+    "yyyy-MM-dd",
+  );
+
   const payload = {
     title: "Where We Are",
-    body: "Tap to set where you'll be in the week ahead",
-    url: "/",
+    body: "Plan next week — school routine + availability",
+    url: `/school?date=${nextMonday}`,
   };
 
   const results = [];

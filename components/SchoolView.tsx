@@ -161,6 +161,21 @@ export default function SchoolView({
     await fetch(`/api/school-events/${id}`, { method: "DELETE" });
   }
 
+  async function skipWholeDay(day: string) {
+    const list = eventsByDay.get(day) ?? [];
+    if (list.length === 0) return;
+    if (
+      !confirm(
+        `Skip all ${list.length} school event${list.length === 1 ? "" : "s"} on this day? They'll also be removed from the Life calendar.`,
+      )
+    )
+      return;
+    setEvents((cur) => cur.filter((e) => e.day !== day));
+    await Promise.all(
+      list.map((ev) => fetch(`/api/school-events/${ev.id}`, { method: "DELETE" })),
+    );
+  }
+
   async function upsertDefault(patch: SchoolDefault) {
     setDefaults((cur) => {
       const rest = cur.filter(
@@ -282,11 +297,21 @@ export default function SchoolView({
               }
             >
               <header className="mb-2 flex items-baseline justify-between">
-                <h2 className="text-base font-semibold">{label}</h2>
-                {isToday && (
-                  <span className="rounded-full bg-teal-600 px-2 py-0.5 text-[10px] font-medium uppercase text-white">
-                    Today
-                  </span>
+                <h2 className="text-base font-semibold">
+                  {label}
+                  {isToday && (
+                    <span className="ml-2 rounded-full bg-teal-600 px-2 py-0.5 text-[10px] font-medium uppercase text-white">
+                      Today
+                    </span>
+                  )}
+                </h2>
+                {list.length > 0 && (
+                  <button
+                    onClick={() => skipWholeDay(day)}
+                    className="text-xs text-neutral-400 hover:text-red-600"
+                  >
+                    Skip whole day
+                  </button>
                 )}
               </header>
               {list.length === 0 ? (
