@@ -93,6 +93,17 @@ export default async function PlanPage({
   const unreadByDay: Record<string, number> = {};
   for (const row of unreadRows ?? []) unreadByDay[row.day] = (unreadByDay[row.day] ?? 0) + 1;
 
+  const { data: commentRows } = await supabase
+    .from("messages")
+    .select("day")
+    .not("day", "is", null)
+    .gte("day", firstDay)
+    .lte("day", lastDay)
+    .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`);
+  const commentedByDay: Record<string, number> = {};
+  for (const row of commentRows ?? [])
+    if (row.day) commentedByDay[row.day] = (commentedByDay[row.day] ?? 0) + 1;
+
   return (
     <>
       <NavBar />
@@ -106,6 +117,7 @@ export default async function PlanPage({
         initialEvents={events}
         initialNotes={notes}
         unreadByDay={unreadByDay}
+        commentedByDay={commentedByDay}
         initialCommentsDay={initialCommentsDay}
       />
     </>

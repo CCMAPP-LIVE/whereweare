@@ -36,6 +36,7 @@ type Props = {
   initialEvents: WeekEvent[];
   initialNotes: WeekNotes;
   unreadByDay: Record<string, number>;
+  commentedByDay: Record<string, number>;
   initialCommentsDay?: string | null;
 };
 
@@ -49,6 +50,7 @@ export default function PlanView({
   initialEvents,
   initialNotes,
   unreadByDay,
+  commentedByDay,
   initialCommentsDay,
 }: Props) {
   const [events, setEvents] = useState<WeekEvent[]>(initialEvents);
@@ -286,13 +288,20 @@ export default function PlanView({
                 <div className="flex gap-1.5">
                   <button
                     onClick={() => setCommentsDay(day)}
-                    className="flex items-center gap-1 rounded-lg border border-black/10 px-2 py-1 text-xs hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10"
+                    className={`relative flex items-center gap-1 rounded-lg border px-2 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/10 ${
+                      (commentedByDay[day] ?? 0) > 0
+                        ? "border-teal-500 text-teal-600 dark:border-teal-500/60"
+                        : "border-black/10 dark:border-white/10"
+                    }`}
                   >
                     💬 Comments
-                    {unread[day] > 0 && (
+                    {(commentedByDay[day] ?? 0) > 0 && (
                       <span className="rounded-full bg-teal-600 px-1.5 py-0.5 text-[10px] font-medium text-white">
-                        {unread[day]}
+                        {commentedByDay[day]}
                       </span>
+                    )}
+                    {unread[day] > 0 && (
+                      <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white dark:ring-neutral-900" />
                     )}
                   </button>
                   <button
