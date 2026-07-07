@@ -14,6 +14,26 @@ import {
 
 type Admin = SupabaseClient<Database>;
 
+/** How long we'll wait on a single calendar fetch before giving up on it. */
+const CALENDAR_FETCH_TIMEOUT_MS = 6000;
+
+/** Resolve `p`, or `fallback` if it rejects or takes longer than `ms`. */
+function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(fallback), ms);
+    p.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      () => {
+        clearTimeout(timer);
+        resolve(fallback);
+      },
+    );
+  });
+}
+
 type AccountWithToken = {
   id: string;
   provider: Provider;
@@ -90,25 +110,21 @@ export async function getEventsForUser(
   for (const cal of cals ?? []) {
     const account = byAccount.get(cal.calendar_account_id);
     if (!account) continue;
-    if (account.provider === "google") {
-      tasks.push(
-        listGoogleEvents(
-          account.refresh_token,
-          cal.external_id,
-          timeMin,
-          timeMax,
-          cal.color,
-        ).catch(() => []),
-      );
-    } else {
-      tasks.push(
-        microsoftAccessToken(account.refresh_token)
-          .then((token) =>
-            listMicrosoftEvents(token, cal.external_id, timeMin, timeMax, cal.color),
+    const fetchOne =
+      account.provider === "google"
+        ? listGoogleEvents(
+            account.refresh_token,
+            cal.external_id,
+            timeMin,
+            timeMax,
+            cal.color,
           )
-          .catch(() => []),
-      );
-    }
+        : microsoftAccessToken(account.refresh_token).then((token) =>
+            listMicrosoftEvents(token, cal.external_id, timeMin, timeMax, cal.color),
+          );
+    // A slow or hung provider must never block the page render, so cap the
+    // wait per calendar and fall back to no events from that one.
+    tasks.push(withTimeout(fetchOne, CALENDAR_FETCH_TIMEOUT_MS, []));
   }
 
   return (await Promise.all(tasks)).flat();

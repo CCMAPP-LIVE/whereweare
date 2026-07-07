@@ -116,29 +116,33 @@ export default async function Home({
   let calendarsConfigured = true;
   try {
     const admin = createAdminClient();
-    for (const p of people) {
-      let evs: NormalizedEvent[] = [];
-      try {
-        evs = await getEventsForUser(admin, p.id, timeMin, timeMax);
-      } catch {
-        evs = [];
-      }
-      for (const ev of evs) {
-        for (const day of daysOf(ev)) {
-          if (day < firstDay || day > lastDay) continue;
-          (events[p.id][day] ??= []).push({
-            id: `${ev.id}:${day}`,
-            title: ev.title,
-            time: timeOf(ev),
-            color: ev.color,
-            provider: ev.provider,
-          });
+    // Fetch every person's calendars in parallel so a view change waits on the
+    // slowest single person, not the sum of everyone.
+    await Promise.all(
+      people.map(async (p) => {
+        let evs: NormalizedEvent[] = [];
+        try {
+          evs = await getEventsForUser(admin, p.id, timeMin, timeMax);
+        } catch {
+          evs = [];
         }
-      }
-      for (const day of Object.keys(events[p.id])) {
-        events[p.id][day].sort((a, b) => a.time.localeCompare(b.time));
-      }
-    }
+        for (const ev of evs) {
+          for (const day of daysOf(ev)) {
+            if (day < firstDay || day > lastDay) continue;
+            (events[p.id][day] ??= []).push({
+              id: `${ev.id}:${day}`,
+              title: ev.title,
+              time: timeOf(ev),
+              color: ev.color,
+              provider: ev.provider,
+            });
+          }
+        }
+        for (const day of Object.keys(events[p.id])) {
+          events[p.id][day].sort((a, b) => a.time.localeCompare(b.time));
+        }
+      }),
+    );
   } catch {
     calendarsConfigured = false; // SUPABASE_SERVICE_ROLE_KEY not set yet
   }

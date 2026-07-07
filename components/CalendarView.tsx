@@ -121,6 +121,7 @@ export default function CalendarView({
         anchor={anchor}
         today={today}
         label={viewRangeLabel(view, anchor, days)}
+        busy={pending}
         onNavigate={navigate}
         onNewEvent={() => setAddingEvent(true)}
       />
@@ -132,7 +133,13 @@ export default function CalendarView({
         </p>
       )}
 
-      <div className={pending ? "opacity-60 transition-opacity" : "transition-opacity"}>
+      <div
+        className={
+          pending
+            ? "pointer-events-none opacity-50 transition-opacity"
+            : "transition-opacity"
+        }
+      >
         {view === "month" ? (
           <MonthGrid
             days={days}
@@ -190,6 +197,7 @@ function Toolbar({
   anchor,
   today,
   label,
+  busy,
   onNavigate,
   onNewEvent,
 }: {
@@ -197,6 +205,7 @@ function Toolbar({
   anchor: string;
   today: string;
   label: string;
+  busy: boolean;
   onNavigate: (view: CalView, anchor: string) => void;
   onNewEvent: () => void;
 }) {
@@ -225,7 +234,31 @@ function Toolbar({
         </button>
       </div>
 
-      <h2 className="text-base font-semibold sm:text-lg">{label}</h2>
+      <h2 className="flex items-center gap-2 text-base font-semibold sm:text-lg">
+        {label}
+        {busy && (
+          <svg
+            className="h-4 w-4 animate-spin text-teal-600"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-label="Loading"
+          >
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            />
+            <path
+              className="opacity-90"
+              fill="currentColor"
+              d="M4 12a8 8 0 0 1 8-8V0C5.4 0 0 5.4 0 12h4z"
+            />
+          </svg>
+        )}
+      </h2>
 
       <div className="ml-auto flex items-center gap-2">
         <button
