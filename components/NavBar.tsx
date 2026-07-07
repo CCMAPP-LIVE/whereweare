@@ -37,6 +37,12 @@ export default function NavBar() {
           School
         </Link>
         <Link
+          href="/messages"
+          className="whitespace-nowrap rounded-lg px-2.5 py-1.5 hover:bg-black/5 dark:hover:bg-white/10"
+        >
+          Messages
+        </Link>
+        <Link
           href="/users"
           className="whitespace-nowrap rounded-lg px-2.5 py-1.5 hover:bg-black/5 dark:hover:bg-white/10"
         >
