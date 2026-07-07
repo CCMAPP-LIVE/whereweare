@@ -29,3 +29,20 @@ export const WEEKS_TO_SHOW = 3;
 
 export const APP_NAME = "Where We Are";
 export const APP_TIMEZONE = "Europe/London";
+
+/**
+ * Fixed drop-off / pickup slots the nursery runs on. Used to constrain the
+ * time selects on /school so David and Ashley pick from real options rather
+ * than typing 08:47 by accident. Values stored as HH:mm; labels are the
+ * human-facing 12-hour form.
+ */
+export const SCHOOL_DROP_TIMES: { value: string; label: string }[] = [
+  { value: "08:00", label: "8:00 am" },
+  { value: "08:45", label: "8:45 am" },
+  { value: "09:15", label: "9:15 am" },
+];
+
+export const SCHOOL_PICKUP_TIMES: { value: string; label: string }[] = [
+  { value: "15:15", label: "3:15 pm" },
+  { value: "16:00", label: "4:00 pm" },
+];

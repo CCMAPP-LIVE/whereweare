@@ -67,31 +67,40 @@ export async function GET() {
         .eq("calendar_account_id", acc.id)
         .eq("enabled", true);
 
+      // Compare a PAST window vs a FUTURE window to test the "past weeks show,
+      // future weeks don't" symptom.
+      const windows = [
+        { name: "past", timeMin: "2026-06-01T00:00:00Z", timeMax: "2026-07-07T00:00:00Z" },
+        { name: "future", timeMin: "2026-07-07T00:00:00Z", timeMax: "2026-08-15T00:00:00Z" },
+      ];
+
       const perCal: unknown[] = [];
       for (const c of cals ?? []) {
-        try {
-          const evs = await cal.events.list({
-            calendarId: c.external_id,
-            timeMin: "2026-06-25T00:00:00Z",
-            timeMax: "2026-07-20T00:00:00Z",
-            singleEvents: true,
-            maxResults: 15,
-          });
-          perCal.push({
-            external_id: c.external_id,
-            label: c.label ?? c.summary,
-            count: (evs.data.items ?? []).length,
-            sample: (evs.data.items ?? [])
-              .slice(0, 5)
-              .map((e) => e.summary ?? "(no title)"),
-          });
-        } catch (e) {
-          perCal.push({
-            external_id: c.external_id,
-            label: c.label ?? c.summary,
-            error: (e as Error).message,
-          });
+        const byWindow: Record<string, unknown> = {};
+        for (const w of windows) {
+          try {
+            const evs = await cal.events.list({
+              calendarId: c.external_id,
+              timeMin: w.timeMin,
+              timeMax: w.timeMax,
+              singleEvents: true,
+              maxResults: 20,
+            });
+            byWindow[w.name] = {
+              count: (evs.data.items ?? []).length,
+              sample: (evs.data.items ?? [])
+                .slice(0, 6)
+                .map((e) => `${e.summary ?? "(no title)"}@${e.start?.dateTime ?? e.start?.date}`),
+            };
+          } catch (e) {
+            byWindow[w.name] = { error: (e as Error).message };
+          }
         }
+        perCal.push({
+          external_id: c.external_id,
+          label: c.label ?? c.summary,
+          ...byWindow,
+        });
       }
       accResult.enabled_calendars = perCal;
     }

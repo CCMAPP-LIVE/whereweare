@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { shiftAnchor } from "@/lib/time";
+import { SCHOOL_DROP_TIMES, SCHOOL_PICKUP_TIMES } from "@/lib/constants";
 
 export type SchoolEvent = {
   id: string;
@@ -410,6 +411,45 @@ function decodeAssignee(value: string): {
   return { assigneeUserId: null, helperId: null };
 }
 
+/**
+ * Time dropdown constrained to the nursery's fixed drop-off / pickup slots.
+ * Falls back to a synthetic "(custom)" option if the row already holds an
+ * unusual value so we never silently drop it — the user can pick one of the
+ * standard options to fix it.
+ */
+function SchoolTimeSelect({
+  kind,
+  value,
+  onChange,
+  className,
+}: {
+  kind: "drop" | "pickup";
+  value: string;
+  onChange: (value: string) => void;
+  className?: string;
+}) {
+  const options = kind === "drop" ? SCHOOL_DROP_TIMES : SCHOOL_PICKUP_TIMES;
+  const isCustom = value && !options.some((o) => o.value === value);
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={
+        className ??
+        "rounded-md bg-transparent px-1 py-0.5 text-xs tabular-nums text-neutral-700 focus:bg-white dark:text-neutral-200 dark:focus:bg-neutral-800"
+      }
+    >
+      <option value="">--:--</option>
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+      {isCustom && <option value={value}>{value} (custom)</option>}
+    </select>
+  );
+}
+
 function AssigneeSelect({
   value,
   onChange,
@@ -478,11 +518,10 @@ function SchoolRow({
 }) {
   return (
     <li className="flex flex-wrap items-center gap-2 rounded-lg bg-black/5 px-2 py-1.5 text-sm dark:bg-white/5">
-      <input
-        type="time"
+      <SchoolTimeSelect
+        kind={ev.kind}
         value={ev.time}
-        onChange={(e) => onUpdate({ time: e.target.value })}
-        className="w-[5.5rem] shrink-0 rounded-md bg-transparent px-1 py-0.5 text-xs tabular-nums text-neutral-700 focus:bg-white dark:text-neutral-200 dark:focus:bg-neutral-800"
+        onChange={(v) => onUpdate({ time: v })}
       />
       <span className="rounded-full bg-amber-200/70 px-1.5 py-0.5 text-[10px] text-amber-900 dark:bg-amber-500/20 dark:text-amber-200">
         {kidName}
@@ -552,6 +591,7 @@ function DefaultsGrid({
   }
 
   function setBothTime(weekday: number, kind: "drop" | "pickup", time: string) {
+    if (!time) return; // "--:--" selection is a no-op; use × to remove.
     for (const kid of kids) {
       const d = map.get(`${kid.id}|${weekday}|${kind}`);
       onUpsert({
@@ -618,12 +658,11 @@ function DefaultsGrid({
                     {(["drop", "pickup"] as const).map((kind) => (
                       <td key={kind} className="py-1 pr-3">
                         <div className="flex items-center gap-1">
-                          <input
-                            type="time"
+                          <SchoolTimeSelect
+                            kind={kind}
                             value={bothTime(weekday, kind)}
-                            placeholder="--:--"
-                            onChange={(e) => setBothTime(weekday, kind, e.target.value)}
-                            className="w-[5.5rem] rounded-md bg-transparent px-1 py-0.5 text-neutral-700 focus:bg-white dark:text-neutral-200 dark:focus:bg-neutral-800"
+                            onChange={(v) => setBothTime(weekday, kind, v)}
+                            className="rounded-md bg-transparent px-1 py-0.5 text-neutral-700 focus:bg-white dark:text-neutral-200 dark:focus:bg-neutral-800"
                           />
                           <AssigneeSelect
                             value={bothAssignee(weekday, kind)}
@@ -674,23 +713,23 @@ function DefaultsGrid({
                       return (
                         <td key={kind} className="py-1 pr-3">
                           <div className="flex items-center gap-1">
-                            <input
-                              type="time"
+                            <SchoolTimeSelect
+                              kind={kind}
                               value={d?.time ?? ""}
-                              placeholder="--:--"
-                              onChange={(e) =>
+                              onChange={(v) => {
+                                if (!v) return; // no-op; × removes the row
                                 onUpsert({
                                   kidId: kid.id,
                                   weekday,
                                   kind,
-                                  time: e.target.value,
+                                  time: v,
                                   defaultAssigneeUserId:
                                     d?.defaultAssigneeUserId ?? null,
                                   helperId: d?.helperId ?? null,
                                   active: true,
-                                })
-                              }
-                              className="w-[5.5rem] rounded-md bg-transparent px-1 py-0.5 text-neutral-700 focus:bg-white dark:text-neutral-200 dark:focus:bg-neutral-800"
+                                });
+                              }}
+                              className="rounded-md bg-transparent px-1 py-0.5 text-neutral-700 focus:bg-white dark:text-neutral-200 dark:focus:bg-neutral-800"
                             />
                             <AssigneeSelect
                               value={encodeAssignee(
