@@ -10,6 +10,12 @@ export default function NavBar() {
       </Link>
       <nav className="flex items-center gap-1 text-sm">
         <Link
+          href="/plan"
+          className="rounded-lg px-3 py-1.5 hover:bg-black/5 dark:hover:bg-white/10"
+        >
+          Plan
+        </Link>
+        <Link
           href="/users"
           className="rounded-lg px-3 py-1.5 hover:bg-black/5 dark:hover:bg-white/10"
         >

@@ -68,6 +68,12 @@ export function nextDay(day: DayKey): DayKey {
   return format(addDays(parseISO(`${day}T12:00:00`), 1), "yyyy-MM-dd");
 }
 
+/** The Monday (YYYY-MM-DD) of the London week that contains `day`. */
+export function weekStartOf(day: DayKey): DayKey {
+  const monday = startOfWeek(parseISO(`${day}T12:00:00`), { weekStartsOn: 1 });
+  return format(monday, "yyyy-MM-dd");
+}
+
 /** Coerce an arbitrary query value into a valid view (defaults to week). */
 export function normalizeView(input: string | undefined): CalView {
   return input === "day" || input === "month" ? input : "week";
