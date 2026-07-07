@@ -17,11 +17,14 @@ export function googleUserAuth(refreshToken: string) {
 
 /**
  * Service-account JWT auth for WRITING to the shared "Life" calendar only.
- * The Life calendar must be shared with this service account's email with
- * "Make changes to events". Because writes go through this account (never a
- * user's token), the app cannot write to anyone's personal calendar.
+ * The Life calendar must be shared with the impersonated user with
+ * "Make changes to events". Because writes go through the service account
+ * (never a user's token), the app cannot write to anyone's personal calendar.
  *
  * GOOGLE_SERVICE_ACCOUNT_KEY is the service-account JSON, base64-encoded.
+ * GOOGLE_IMPERSONATE_USER, when set, enables domain-wide delegation: the SA
+ * acts on behalf of that Workspace user. Required when the Workspace policy
+ * blocks granting external accounts write access on shared calendars.
  */
 export function googleServiceAccountAuth() {
   const json = JSON.parse(
@@ -34,5 +37,6 @@ export function googleServiceAccountAuth() {
     email: json.client_email,
     key: json.private_key,
     scopes: ["https://www.googleapis.com/auth/calendar.events"],
+    subject: process.env.GOOGLE_IMPERSONATE_USER || undefined,
   });
 }
