@@ -1,18 +1,27 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getAccountsForUser, refreshCalendarsForUser } from "@/lib/calendars";
+import { getAccountsWithCalendars, refreshCalendarsForUser } from "@/lib/calendars";
 import NavBar from "@/components/NavBar";
 import ProfileForm from "@/components/ProfileForm";
 import ConnectAccounts from "@/components/ConnectAccounts";
+import CalendarLabelEditor from "@/components/CalendarLabelEditor";
 import EnablePush from "@/components/EnablePush";
 
 export const dynamic = "force-dynamic";
 
+type Cal = {
+  id: string;
+  summary: string | null;
+  label: string | null;
+  color: string | null;
+  is_primary: boolean;
+};
 type Account = {
   id: string;
   provider: "google" | "microsoft";
   account_email: string | null;
+  calendars: Cal[];
 };
 
 function Section({
@@ -53,7 +62,7 @@ export default async function SettingsPage() {
   try {
     const admin = createAdminClient();
     await refreshCalendarsForUser(admin, user.id).catch(() => {});
-    accounts = await getAccountsForUser(admin, user.id);
+    accounts = await getAccountsWithCalendars(admin, user.id);
   } catch {
     configError = true; // service-role key not set yet
   }
@@ -85,6 +94,20 @@ export default async function SettingsPage() {
                 account_email: a.account_email,
               }))}
             />
+          )}
+        </Section>
+
+        <Section
+          title="Calendar labels"
+          description="Give each source calendar a name so you can tell events apart at a glance."
+        >
+          {configError ? (
+            <p className="text-sm text-amber-600">
+              Calendar setup isn’t complete yet (missing service-role key). See
+              README.
+            </p>
+          ) : (
+            <CalendarLabelEditor accounts={accounts} />
           )}
         </Section>
 

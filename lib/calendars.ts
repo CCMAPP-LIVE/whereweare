@@ -40,10 +40,19 @@ type AccountWithToken = {
   refresh_token: string;
 };
 
-export type ConnectedAccount = {
+export type CalendarRow = {
+  id: string;
+  summary: string | null;
+  label: string | null;
+  color: string | null;
+  is_primary: boolean;
+};
+
+export type AccountWithCalendars = {
   id: string;
   provider: Provider;
   account_email: string | null;
+  calendars: CalendarRow[];
 };
 
 /** Connected accounts for a user, joined with their refresh tokens (in JS). */
@@ -88,7 +97,7 @@ export async function getEventsForUser(
 
   const { data: cals } = await admin
     .from("calendars")
-    .select("external_id, color, calendar_account_id")
+    .select("external_id, color, label, summary, calendar_account_id")
     .in(
       "calendar_account_id",
       accounts.map((a) => a.id),
@@ -100,6 +109,7 @@ export async function getEventsForUser(
   for (const cal of cals ?? []) {
     const account = byAccount.get(cal.calendar_account_id);
     if (!account) continue;
+    const label = cal.label?.trim() || cal.summary || cal.external_id;
     const fetchOne =
       account.provider === "google"
         ? listGoogleEvents(
@@ -114,7 +124,11 @@ export async function getEventsForUser(
           );
     // A slow or hung provider must never block the page render, so cap the
     // wait per calendar and fall back to no events from that one.
-    tasks.push(withTimeout(fetchOne, CALENDAR_FETCH_TIMEOUT_MS, []));
+    tasks.push(
+      withTimeout(fetchOne, CALENDAR_FETCH_TIMEOUT_MS, []).then((evs) =>
+        evs.map((ev) => ({ ...ev, calendarLabel: label })),
+      ),
+    );
   }
 
   return (await Promise.all(tasks)).flat();
@@ -160,15 +174,41 @@ export async function refreshCalendarsForUser(
   }
 }
 
-/** Connected accounts for the settings UI. */
-export async function getAccountsForUser(
+/** Accounts + their calendars (with labels) for the settings UI. */
+export async function getAccountsWithCalendars(
   admin: Admin,
   userId: string,
-): Promise<ConnectedAccount[]> {
+): Promise<AccountWithCalendars[]> {
   const { data: accounts } = await admin
     .from("calendar_accounts")
     .select("id, provider, account_email")
     .eq("user_id", userId)
     .order("created_at");
-  return accounts ?? [];
+  if (!accounts?.length) return [];
+
+  const ids = accounts.map((a) => a.id);
+  const { data: cals } = await admin
+    .from("calendars")
+    .select("id, summary, label, color, is_primary, calendar_account_id")
+    .in("calendar_account_id", ids);
+
+  const byAccount = new Map<string, CalendarRow[]>();
+  for (const c of cals ?? []) {
+    const list = byAccount.get(c.calendar_account_id) ?? [];
+    list.push({
+      id: c.id,
+      summary: c.summary,
+      label: c.label,
+      color: c.color,
+      is_primary: c.is_primary,
+    });
+    byAccount.set(c.calendar_account_id, list);
+  }
+
+  return accounts.map((a) => ({
+    id: a.id,
+    provider: a.provider,
+    account_email: a.account_email,
+    calendars: byAccount.get(a.id) ?? [],
+  }));
 }

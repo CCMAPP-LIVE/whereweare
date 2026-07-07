@@ -134,6 +134,7 @@ export default async function Home({
               title: ev.title,
               time: timeOf(ev),
               color: ev.color,
+              calendarLabel: ev.calendarLabel,
               provider: ev.provider,
             });
           }

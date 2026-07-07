@@ -111,6 +111,7 @@ export async function listMicrosoftEvents(
         allDay: Boolean(ev.isAllDay),
         calendarExternalId: calendarId,
         color,
+        calendarLabel: "",
         provider: "microsoft",
       });
     }

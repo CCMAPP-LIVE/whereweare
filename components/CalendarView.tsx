@@ -12,6 +12,7 @@ export type EventLite = {
   title: string;
   time: string;
   color: string | null;
+  calendarLabel: string;
   provider: "google" | "microsoft";
 };
 
@@ -530,6 +531,7 @@ function EventList({ items }: { items: EventLite[] }) {
       {items.map((ev) => (
         <li
           key={ev.id}
+          title={ev.calendarLabel}
           className="flex items-center gap-1.5 text-[11px] text-neutral-500"
         >
           <span
@@ -537,6 +539,9 @@ function EventList({ items }: { items: EventLite[] }) {
             style={{ background: ev.color ?? "#9ca3af" }}
           />
           <span className="shrink-0 tabular-nums">{ev.time}</span>
+          <span className="max-w-[72px] shrink-0 truncate rounded bg-black/5 px-1 text-[9px] uppercase tracking-wide text-neutral-400 dark:bg-white/10">
+            {ev.calendarLabel}
+          </span>
           <span className="truncate">{ev.title}</span>
         </li>
       ))}

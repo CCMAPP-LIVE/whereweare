@@ -71,6 +71,7 @@ export async function listGoogleEvents(
         allDay,
         calendarExternalId: calendarId,
         color,
+        calendarLabel: "",
         provider: "google",
       });
     }

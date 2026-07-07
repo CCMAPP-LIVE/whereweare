@@ -14,6 +14,8 @@ export type NormalizedEvent = {
   allDay: boolean;
   calendarExternalId: string;
   color: string | null;
+  /** User-facing name for the source calendar (custom label, or its own title). */
+  calendarLabel: string;
   provider: Provider;
 };
 
