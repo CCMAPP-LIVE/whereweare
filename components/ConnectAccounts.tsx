@@ -52,17 +52,20 @@ export default function ConnectAccounts({ accounts }: { accounts: Account[] }) {
     setBusy(label);
     const supabase = createClient();
     const providerParam = provider === "azure" ? "microsoft" : "google";
-    const options =
+    // `select_account` forces the provider's account chooser, so you can add a
+    // *different* account rather than silently re-linking the one you're in.
+    const queryParams: Record<string, string> =
       provider === "google"
-        ? {
-            scopes: "https://www.googleapis.com/auth/calendar.readonly",
-            queryParams: { access_type: "offline", prompt: "consent" },
-            redirectTo: `${location.origin}/auth/callback?provider=google&next=/settings`,
-          }
-        : {
-            scopes: "openid email offline_access Calendars.Read",
-            redirectTo: `${location.origin}/auth/callback?provider=microsoft&next=/settings`,
-          };
+        ? { access_type: "offline", prompt: "select_account consent" }
+        : { prompt: "select_account" };
+    const options = {
+      scopes:
+        provider === "google"
+          ? "https://www.googleapis.com/auth/calendar.readonly"
+          : "openid email offline_access Calendars.Read",
+      queryParams,
+      redirectTo: `${location.origin}/auth/callback?provider=${providerParam}&next=/settings`,
+    };
     const { error } = await supabase.auth.linkIdentity({ provider, options });
     if (error) {
       setBusy(null);
