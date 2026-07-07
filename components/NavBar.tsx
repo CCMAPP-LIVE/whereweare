@@ -3,38 +3,46 @@ import { APP_NAME } from "@/lib/constants";
 
 export default function NavBar() {
   return (
-    <header className="sticky top-0 z-20 flex items-center justify-between border-b border-black/10 bg-white/80 px-4 py-3 backdrop-blur dark:border-white/10 dark:bg-neutral-900/80">
-      <Link href="/" className="flex items-center gap-2 font-semibold">
-        <span aria-hidden>📍</span>
-        <span>{APP_NAME}</span>
+    <header className="nav-safe sticky top-0 z-20 flex items-center gap-2 border-b border-black/10 bg-white/80 px-3 py-3 backdrop-blur dark:border-white/10 dark:bg-neutral-900/80 sm:px-4">
+      <Link
+        href="/"
+        aria-label={APP_NAME}
+        className="flex shrink-0 items-center gap-2 font-semibold"
+      >
+        <span aria-hidden className="text-lg leading-none">
+          📍
+        </span>
+        {/* Full name on larger screens; just the pin on phones to save room. */}
+        <span className="hidden whitespace-nowrap sm:inline">{APP_NAME}</span>
       </Link>
-      <nav className="flex items-center gap-1 text-sm">
+      {/* Horizontally scrollable so the links never overflow on a narrow phone. */}
+      <nav className="scrollbar-none flex flex-1 items-center justify-end gap-0.5 overflow-x-auto text-sm">
         <Link
           href="/"
-          className="rounded-lg px-3 py-1.5 hover:bg-black/5 dark:hover:bg-white/10"
+          className="whitespace-nowrap rounded-lg px-2.5 py-1.5 hover:bg-black/5 dark:hover:bg-white/10"
         >
           Calendar
         </Link>
         <Link
           href="/plan"
-          className="rounded-lg px-3 py-1.5 hover:bg-black/5 dark:hover:bg-white/10"
+          className="whitespace-nowrap rounded-lg px-2.5 py-1.5 hover:bg-black/5 dark:hover:bg-white/10"
         >
           Plan
         </Link>
         <Link
           href="/users"
-          className="rounded-lg px-3 py-1.5 hover:bg-black/5 dark:hover:bg-white/10"
+          className="whitespace-nowrap rounded-lg px-2.5 py-1.5 hover:bg-black/5 dark:hover:bg-white/10"
         >
           People
         </Link>
         <Link
           href="/settings"
-          className="rounded-lg px-3 py-1.5 hover:bg-black/5 dark:hover:bg-white/10"
+          className="whitespace-nowrap rounded-lg px-2.5 py-1.5 hover:bg-black/5 dark:hover:bg-white/10"
         >
           Settings
         </Link>
-        <form action="/auth/signout" method="post">
-          <button className="rounded-lg px-3 py-1.5 text-neutral-500 hover:bg-black/5 dark:hover:bg-white/10">
+        <form action="/auth/signout" method="post" className="shrink-0">
+          <button className="whitespace-nowrap rounded-lg px-2.5 py-1.5 text-neutral-500 hover:bg-black/5 dark:hover:bg-white/10">
             Sign out
           </button>
         </form>

@@ -13,7 +13,7 @@ export type WeekEvent = {
   title: string;
   notes: string | null;
   assigneeUserId: string | null;
-  kidId: string | null;
+  kidIds: string[];
 };
 
 export type WeekNotes = {
@@ -58,9 +58,10 @@ export default function PlanView({
     return (userId: string | null) => (userId ? map.get(userId) ?? null : null);
   }, [people]);
 
-  const kidNameOf = useMemo(() => {
+  const kidNamesOf = useMemo(() => {
     const map = new Map(kids.map((k) => [k.id, k.name] as const));
-    return (kidId: string | null) => (kidId ? map.get(kidId) ?? null : null);
+    return (ids: string[]) =>
+      ids.map((id) => map.get(id)).filter((n): n is string => !!n);
   }, [kids]);
 
   const eventsByDay = useMemo(() => {
@@ -105,7 +106,7 @@ export default function PlanView({
     startTime: string | null;
     endTime: string | null;
     assigneeUserId: string | null;
-    kidId: string | null;
+    kidIds: string[];
     notes: string | null;
   }) {
     const body = JSON.stringify({
@@ -114,7 +115,7 @@ export default function PlanView({
       startTime: input.startTime,
       endTime: input.endTime,
       assigneeUserId: input.assigneeUserId,
-      kidId: input.kidId,
+      kidIds: input.kidIds,
       notes: input.notes,
     });
     if (input.id) {
@@ -133,7 +134,7 @@ export default function PlanView({
                 startTime: input.startTime,
                 endTime: input.endTime,
                 assigneeUserId: input.assigneeUserId,
-                kidId: input.kidId,
+                kidIds: input.kidIds,
                 notes: input.notes,
               }
             : e,
@@ -157,7 +158,7 @@ export default function PlanView({
             startTime: input.startTime,
             endTime: input.endTime,
             assigneeUserId: input.assigneeUserId,
-            kidId: input.kidId,
+            kidIds: input.kidIds,
             notes: input.notes,
           },
         ]);
@@ -282,13 +283,16 @@ export default function PlanView({
                         {ev.startTime ? ev.startTime.slice(0, 5) : "All day"}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-baseline gap-x-2">
+                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                           <span className="font-medium">{ev.title}</span>
-                          {ev.kidId && (
-                            <span className="rounded-full bg-amber-200/70 px-1.5 py-0.5 text-[10px] text-amber-900 dark:bg-amber-500/20 dark:text-amber-200">
-                              {kidNameOf(ev.kidId) ?? "Kid"}
+                          {kidNamesOf(ev.kidIds).map((name) => (
+                            <span
+                              key={name}
+                              className="rounded-full bg-amber-200/70 px-1.5 py-0.5 text-[10px] text-amber-900 dark:bg-amber-500/20 dark:text-amber-200"
+                            >
+                              {name}
                             </span>
-                          )}
+                          ))}
                           {ev.assigneeUserId && (
                             <span className="rounded-full bg-white/60 px-1.5 py-0.5 text-[10px] text-neutral-600 dark:bg-white/10 dark:text-neutral-300">
                               by {nameOf(ev.assigneeUserId) ?? "Someone"}
@@ -355,7 +359,7 @@ function EventEditor({
     startTime: string | null;
     endTime: string | null;
     assigneeUserId: string | null;
-    kidId: string | null;
+    kidIds: string[];
     notes: string | null;
   }) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
@@ -368,10 +372,14 @@ function EventEditor({
   const [assigneeUserId, setAssigneeUserId] = useState<string>(
     event?.assigneeUserId ?? currentUserId,
   );
-  const [kidId, setKidId] = useState<string>(event?.kidId ?? "");
+  const [kidIds, setKidIds] = useState<string[]>(event?.kidIds ?? []);
   const [notes, setNotes] = useState(event?.notes ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function toggleKid(id: string) {
+    setKidIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
+  }
 
   async function handleSave() {
     if (!title.trim()) {
@@ -388,7 +396,7 @@ function EventEditor({
         startTime: allDay ? null : startTime,
         endTime: allDay ? null : endTime || null,
         assigneeUserId: assigneeUserId || null,
-        kidId: kidId || null,
+        kidIds,
         notes: notes.trim() || null,
       });
     } catch (e) {
@@ -430,50 +438,56 @@ function EventEditor({
             />
           </label>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium uppercase text-neutral-400">
-                For which kid
-              </span>
-              <select
-                value={kidId}
-                onChange={(e) => setKidId(e.target.value)}
-                disabled={kids.length === 0}
-                className="w-full rounded-lg border border-black/10 bg-transparent px-3 py-2 text-sm disabled:opacity-50 dark:border-white/10"
-              >
-                <option value="">Nobody in particular</option>
-                {kids.map((k) => (
-                  <option key={k.id} value={k.id}>
-                    {k.name}
-                  </option>
-                ))}
-              </select>
-              {kids.length === 0 && (
-                <p className="mt-0.5 text-[11px] text-neutral-400">
-                  Add kids on the People page.
-                </p>
-              )}
-            </label>
-
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium uppercase text-neutral-400">
-                Who's doing it
-              </span>
-              <select
-                value={assigneeUserId ?? ""}
-                onChange={(e) => setAssigneeUserId(e.target.value)}
-                className="w-full rounded-lg border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
-              >
-                <option value="">Nobody in particular</option>
-                {people.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                    {p.id === currentUserId ? " (you)" : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <div>
+            <span className="mb-1 block text-xs font-medium uppercase text-neutral-400">
+              For which kids
+            </span>
+            {kids.length === 0 ? (
+              <p className="text-[11px] text-neutral-400">
+                Add kids on the People page first.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {kids.map((k) => {
+                  const active = kidIds.includes(k.id);
+                  return (
+                    <button
+                      key={k.id}
+                      type="button"
+                      onClick={() => toggleKid(k.id)}
+                      className={
+                        "rounded-full border px-2.5 py-1 text-xs transition " +
+                        (active
+                          ? "border-amber-500 bg-amber-200/70 text-amber-900 dark:bg-amber-500/30 dark:text-amber-100"
+                          : "border-black/15 text-neutral-500 hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10")
+                      }
+                    >
+                      {k.name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
+
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium uppercase text-neutral-400">
+              Who's doing it
+            </span>
+            <select
+              value={assigneeUserId ?? ""}
+              onChange={(e) => setAssigneeUserId(e.target.value)}
+              className="w-full rounded-lg border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+            >
+              <option value="">Nobody in particular</option>
+              {people.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                  {p.id === currentUserId ? " (you)" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
 
           <label className="block">
             <span className="mb-1 block text-xs font-medium uppercase text-neutral-400">

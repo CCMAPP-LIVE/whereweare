@@ -44,7 +44,7 @@ export default async function PlanPage({
     supabase
       .from("week_events")
       .select(
-        "id, user_id, day, start_time, end_time, title, notes, assignee_user_id, kid_id, google_event_id, updated_at",
+        "id, user_id, day, start_time, end_time, title, notes, assignee_user_id, kid_ids, google_event_id, updated_at",
       )
       .gte("day", firstDay)
       .lte("day", lastDay)
@@ -64,7 +64,7 @@ export default async function PlanPage({
     title: r.title,
     notes: r.notes,
     assigneeUserId: r.assignee_user_id,
-    kidId: r.kid_id,
+    kidIds: r.kid_ids ?? [],
   }));
 
   const kids = (kidRows ?? []).map((k) => ({ id: k.id, name: k.name }));

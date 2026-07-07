@@ -16,7 +16,7 @@ export type WeekEventForSync = {
   endTime: string | null;
   title: string;
   notes: string | null;
-  kidName: string | null;
+  kidNames: string[];
   assigneeName: string | null;
   googleEventId: string | null;
 };
@@ -25,12 +25,21 @@ function calendarClient() {
   return google.calendar({ version: "v3", auth: googleServiceAccountAuth() });
 }
 
+function joinKidNames(names: string[]): string {
+  if (names.length === 0) return "";
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} & ${names[1]}`;
+  return `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]}`;
+}
+
 function buildEventBody(ev: WeekEventForSync) {
-  // "<title> — <kidName> (<assigneeName>)"; each middle segment drops out when
-  // absent. Matches the whiteboard's "Drop 9:15 Bernie" / "Drop 4:00 Mommy"
-  // shape — kid is the subject, assignee is the doer.
+  // "<title> — <kidName(s)> (<assigneeName>)"; each middle segment drops out
+  // when absent. Matches the whiteboard's "Drop 9:15 Bernie" / "Drop 4:00
+  // Mommy" shape — kid is the subject, assignee is the doer. Multi-kid events
+  // read naturally as "Bernie & Percy" or "A, B & C".
   let summary = ev.title;
-  if (ev.kidName) summary += ` — ${ev.kidName}`;
+  const kids = joinKidNames(ev.kidNames);
+  if (kids) summary += ` — ${kids}`;
   if (ev.assigneeName) summary += ` (${ev.assigneeName})`;
   const description = ev.notes || undefined;
 

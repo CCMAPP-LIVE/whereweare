@@ -34,8 +34,9 @@ export async function PUT(request: Request, { params }: Params) {
     typeof body.assigneeUserId === "string" && body.assigneeUserId !== ""
       ? body.assigneeUserId
       : null;
-  const kidId: string | null =
-    typeof body.kidId === "string" && body.kidId !== "" ? body.kidId : null;
+  const kidIds: string[] = Array.isArray(body.kidIds)
+    ? body.kidIds.filter((x: unknown): x is string => typeof x === "string" && x !== "")
+    : [];
 
   if (!title) return NextResponse.json({ error: "title required" }, { status: 400 });
   if (!DAY_RE.test(day))
@@ -65,7 +66,7 @@ export async function PUT(request: Request, { params }: Params) {
       title,
       notes,
       assignee_user_id: assigneeUserId,
-      kid_id: kidId,
+      kid_ids: kidIds,
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
@@ -74,7 +75,7 @@ export async function PUT(request: Request, { params }: Params) {
   let lifeSynced = true;
   let warning: string | undefined;
   try {
-    const [assigneeRes, kidRes] = await Promise.all([
+    const [assigneeRes, kidsRes] = await Promise.all([
       assigneeUserId
         ? admin
             .from("profiles")
@@ -82,12 +83,16 @@ export async function PUT(request: Request, { params }: Params) {
             .eq("id", assigneeUserId)
             .maybeSingle()
         : Promise.resolve({ data: null }),
-      kidId
-        ? admin.from("kids").select("name").eq("id", kidId).maybeSingle()
-        : Promise.resolve({ data: null }),
+      kidIds.length > 0
+        ? admin
+            .from("kids")
+            .select("id, name, sort_order")
+            .in("id", kidIds)
+            .order("sort_order", { ascending: true })
+        : Promise.resolve({ data: [] as { id: string; name: string }[] }),
     ]);
     const assigneeName = assigneeRes.data?.display_name ?? null;
-    const kidName = kidRes.data?.name ?? null;
+    const kidNames = (kidsRes.data ?? []).map((k) => k.name);
     const newGoogleEventId = await upsertWeekEventOnLifeCalendar({
       id,
       day,
@@ -95,7 +100,7 @@ export async function PUT(request: Request, { params }: Params) {
       endTime,
       title,
       notes,
-      kidName,
+      kidNames,
       assigneeName,
       googleEventId: existing.google_event_id,
     });

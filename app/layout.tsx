@@ -24,6 +24,8 @@ export const viewport: Viewport = {
   themeColor: "#0f766e",
   width: "device-width",
   initialScale: 1,
+  // Extend under the notch/home indicator so env(safe-area-inset-*) works.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
