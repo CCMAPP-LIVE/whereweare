@@ -17,10 +17,13 @@ export async function listGoogleCalendars(
   const out: DiscoveredCalendar[] = [];
   let pageToken: string | undefined;
   do {
+    // Include hidden calendars too — a calendar unstarred in Google's UI
+    // (e.g. a secondary domain alias) would otherwise never be discoverable
+    // here even though the user wants to show/label it.
     const res = await calendar.calendarList.list({
       maxResults: 250,
       pageToken,
-      showHidden: false,
+      showHidden: true,
     });
     for (const item of res.data.items ?? []) {
       if (!item.id) continue;
