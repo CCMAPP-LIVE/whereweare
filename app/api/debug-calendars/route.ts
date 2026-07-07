@@ -99,5 +99,8 @@ export async function GET() {
     out.push(accResult);
   }
 
-  return NextResponse.json({ user_email: user.email, accounts: out }, { status: 200 });
+  const payload = { user_email: user.email, accounts: out };
+  // Also emit to runtime logs so the result is retrievable server-side.
+  console.log("DEBUG_CALENDARS_RESULT " + JSON.stringify(payload));
+  return NextResponse.json(payload, { status: 200 });
 }
