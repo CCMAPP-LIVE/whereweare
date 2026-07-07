@@ -346,6 +346,118 @@ export type Database = {
           },
         ]
       }
+      school_defaults: {
+        Row: {
+          active: boolean
+          created_at: string
+          default_assignee_user_id: string | null
+          kid_id: string
+          kind: string
+          time: string
+          updated_at: string
+          weekday: number
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          default_assignee_user_id?: string | null
+          kid_id: string
+          kind: string
+          time: string
+          updated_at?: string
+          weekday: number
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          default_assignee_user_id?: string | null
+          kid_id?: string
+          kind?: string
+          time?: string
+          updated_at?: string
+          weekday?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "school_defaults_kid_id_fkey"
+            columns: ["kid_id"]
+            isOneToOne: false
+            referencedRelation: "kids"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      school_events: {
+        Row: {
+          assignee_user_id: string | null
+          created_at: string
+          created_by: string | null
+          day: string
+          google_event_id: string | null
+          id: string
+          kid_id: string
+          kind: string
+          notes: string | null
+          time: string
+          updated_at: string
+        }
+        Insert: {
+          assignee_user_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          day: string
+          google_event_id?: string | null
+          id?: string
+          kid_id: string
+          kind: string
+          notes?: string | null
+          time: string
+          updated_at?: string
+        }
+        Update: {
+          assignee_user_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          day?: string
+          google_event_id?: string | null
+          id?: string
+          kid_id?: string
+          kind?: string
+          notes?: string | null
+          time?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "school_events_kid_id_fkey"
+            columns: ["kid_id"]
+            isOneToOne: false
+            referencedRelation: "kids"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      school_weeks: {
+        Row: {
+          is_school_week: boolean
+          notes: string | null
+          updated_at: string
+          week_start: string
+        }
+        Insert: {
+          is_school_week?: boolean
+          notes?: string | null
+          updated_at?: string
+          week_start: string
+        }
+        Update: {
+          is_school_week?: boolean
+          notes?: string | null
+          updated_at?: string
+          week_start?: string
+        }
+        Relationships: []
+      }
       week_events: {
         Row: {
           assignee_user_id: string | null

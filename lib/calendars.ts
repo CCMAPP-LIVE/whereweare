@@ -40,19 +40,10 @@ type AccountWithToken = {
   refresh_token: string;
 };
 
-export type CalendarRow = {
-  id: string;
-  summary: string | null;
-  color: string | null;
-  enabled: boolean;
-  is_primary: boolean;
-};
-
-export type AccountWithCalendars = {
+export type ConnectedAccount = {
   id: string;
   provider: Provider;
   account_email: string | null;
-  calendars: CalendarRow[];
 };
 
 /** Connected accounts for a user, joined with their refresh tokens (in JS). */
@@ -82,9 +73,9 @@ async function accountsForUser(
 }
 
 /**
- * Read + merge events from all ENABLED calendars across every connected
- * account for a user. Resilient: a failing account/calendar yields no events
- * rather than throwing, so the page still renders availability.
+ * Read + merge events from every calendar across every connected account for
+ * a user. Resilient: a failing account/calendar yields no events rather than
+ * throwing, so the page still renders availability.
  */
 export async function getEventsForUser(
   admin: Admin,
@@ -98,7 +89,6 @@ export async function getEventsForUser(
   const { data: cals } = await admin
     .from("calendars")
     .select("external_id, color, calendar_account_id")
-    .eq("enabled", true)
     .in(
       "calendar_account_id",
       accounts.map((a) => a.id),
@@ -131,9 +121,8 @@ export async function getEventsForUser(
 }
 
 /**
- * Discover calendars from every connected account and upsert them, preserving
- * the user's existing `enabled` choices and defaulting a newly-seen primary
- * calendar to enabled.
+ * Discover calendars from every connected account and upsert them. Every
+ * calendar is shown, so there's nothing to preserve beyond identity.
  */
 export async function refreshCalendarsForUser(
   admin: Admin,
@@ -154,23 +143,13 @@ export async function refreshCalendarsForUser(
       continue;
     }
 
-    const { data: existing } = await admin
-      .from("calendars")
-      .select("external_id, enabled")
-      .eq("calendar_account_id", account.id);
-    const existingMap = new Map(
-      (existing ?? []).map((c) => [c.external_id, c.enabled]),
-    );
-
     const rows = discovered.map((c) => ({
       calendar_account_id: account.id,
       external_id: c.externalId,
       summary: c.summary,
       color: c.color,
       is_primary: c.isPrimary,
-      enabled: existingMap.has(c.externalId)
-        ? existingMap.get(c.externalId)!
-        : c.isPrimary,
+      enabled: true,
     }));
 
     if (rows.length > 0) {
@@ -181,41 +160,15 @@ export async function refreshCalendarsForUser(
   }
 }
 
-/** Accounts + their calendars for the settings UI (no embedded selects). */
-export async function getAccountsWithCalendars(
+/** Connected accounts for the settings UI. */
+export async function getAccountsForUser(
   admin: Admin,
   userId: string,
-): Promise<AccountWithCalendars[]> {
+): Promise<ConnectedAccount[]> {
   const { data: accounts } = await admin
     .from("calendar_accounts")
     .select("id, provider, account_email")
     .eq("user_id", userId)
     .order("created_at");
-  if (!accounts?.length) return [];
-
-  const ids = accounts.map((a) => a.id);
-  const { data: cals } = await admin
-    .from("calendars")
-    .select("id, summary, color, enabled, is_primary, calendar_account_id")
-    .in("calendar_account_id", ids);
-
-  const byAccount = new Map<string, CalendarRow[]>();
-  for (const c of cals ?? []) {
-    const list = byAccount.get(c.calendar_account_id) ?? [];
-    list.push({
-      id: c.id,
-      summary: c.summary,
-      color: c.color,
-      enabled: c.enabled,
-      is_primary: c.is_primary,
-    });
-    byAccount.set(c.calendar_account_id, list);
-  }
-
-  return accounts.map((a) => ({
-    id: a.id,
-    provider: a.provider,
-    account_email: a.account_email,
-    calendars: byAccount.get(a.id) ?? [],
-  }));
+  return accounts ?? [];
 }

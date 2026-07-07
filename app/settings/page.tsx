@@ -1,30 +1,18 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import {
-  getAccountsWithCalendars,
-  refreshCalendarsForUser,
-} from "@/lib/calendars";
+import { getAccountsForUser, refreshCalendarsForUser } from "@/lib/calendars";
 import NavBar from "@/components/NavBar";
 import ProfileForm from "@/components/ProfileForm";
 import ConnectAccounts from "@/components/ConnectAccounts";
-import CalendarPicker from "@/components/CalendarPicker";
 import EnablePush from "@/components/EnablePush";
 
 export const dynamic = "force-dynamic";
 
-type Cal = {
-  id: string;
-  summary: string | null;
-  color: string | null;
-  enabled: boolean;
-  is_primary: boolean;
-};
 type Account = {
   id: string;
   provider: "google" | "microsoft";
   account_email: string | null;
-  calendars: Cal[];
 };
 
 function Section({
@@ -65,7 +53,7 @@ export default async function SettingsPage() {
   try {
     const admin = createAdminClient();
     await refreshCalendarsForUser(admin, user.id).catch(() => {});
-    accounts = await getAccountsWithCalendars(admin, user.id);
+    accounts = await getAccountsForUser(admin, user.id);
   } catch {
     configError = true; // service-role key not set yet
   }
@@ -82,20 +70,7 @@ export default async function SettingsPage() {
 
         <Section
           title="Connected accounts"
-          description="Sign in to the calendars you want to pull events from. Read-only — we never change your personal calendars."
-        >
-          <ConnectAccounts
-            accounts={accounts.map((a) => ({
-              id: a.id,
-              provider: a.provider,
-              account_email: a.account_email,
-            }))}
-          />
-        </Section>
-
-        <Section
-          title="Calendars to show"
-          description="Pick which calendars appear in the week view."
+          description="Connect as many accounts as you like — every calendar in each one shows up in the week view. Read-only — we never change your personal calendars."
         >
           {configError ? (
             <p className="text-sm text-amber-600">
@@ -103,7 +78,13 @@ export default async function SettingsPage() {
               README.
             </p>
           ) : (
-            <CalendarPicker accounts={accounts} />
+            <ConnectAccounts
+              accounts={accounts.map((a) => ({
+                id: a.id,
+                provider: a.provider,
+                account_email: a.account_email,
+              }))}
+            />
           )}
         </Section>
 
