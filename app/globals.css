@@ -35,6 +35,11 @@ body {
   padding-top: max(0.75rem, env(safe-area-inset-top));
 }
 
+/* Bottom-sheet modals: keep the primary button above the home indicator. */
+.pb-safe {
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+}
+
 /* Swipeable rows (e.g. the nav) without a visible scrollbar. */
 .scrollbar-none {
   -ms-overflow-style: none;
