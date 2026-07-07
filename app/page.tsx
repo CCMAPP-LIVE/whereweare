@@ -14,7 +14,10 @@ import {
 import { APP_TIMEZONE } from "@/lib/constants";
 import type { NormalizedEvent, Slot, Status } from "@/lib/types";
 import NavBar from "@/components/NavBar";
-import CalendarView, { type EventLite } from "@/components/CalendarView";
+import CalendarView, {
+  type EventLite,
+  type SchoolDay,
+} from "@/components/CalendarView";
 
 export const dynamic = "force-dynamic";
 
@@ -180,14 +183,15 @@ export default async function Home({
     events[we.user_id][we.day].sort((a, b) => a.time.localeCompare(b.time));
   }
 
-  // School drop-offs / pickups (school_events), shown as their own kid rows
-  // (Bernie / Percy) with the person OR helper doing each run — so helper runs
-  // (e.g. Joy) are clearly visible instead of hidden under a parent.
+  // School drop-offs / pickups (school_events), summarised per day into a
+  // prominent "who's doing it" band: one line for the drop-off, one for the
+  // pickup, with the person/helper name shown boldly. Kids are only broken out
+  // when Bernie and Percy have different people for the same run.
   const [{ data: schoolEvents }, { data: kidRows }, { data: helperRows }] =
     await Promise.all([
       supabase
         .from("school_events")
-        .select("id, day, time, kind, kid_id, assignee_user_id, helper_id")
+        .select("day, time, kind, kid_id, assignee_user_id, helper_id")
         .gte("day", firstDay)
         .lte("day", lastDay),
       supabase.from("kids").select("id, name, sort_order").order("sort_order"),
@@ -195,25 +199,42 @@ export default async function Home({
     ]);
   const helperName = new Map((helperRows ?? []).map((h) => [h.id, h.name]));
   const profileName = new Map(people.map((p) => [p.id, p.name]));
-  const kids = (kidRows ?? []).map((k) => ({ id: k.id, name: k.name }));
-  const kidEvents: Record<string, Record<string, EventLite[]>> = {};
-  for (const k of kids) kidEvents[k.id] = {};
+  const kidName = new Map((kidRows ?? []).map((k) => [k.id, k.name]));
+
+  // day -> kind -> { time, who -> [kidNames] }
+  const acc: Record<
+    string,
+    Partial<Record<"drop" | "pickup", { time: string; whoToKids: Map<string, string[]> }>>
+  > = {};
   for (const se of schoolEvents ?? []) {
-    if (!kidEvents[se.kid_id]) continue;
     const who = se.assignee_user_id
       ? (profileName.get(se.assignee_user_id) ?? "?")
       : se.helper_id
         ? (helperName.get(se.helper_id) ?? "?")
         : "—";
-    (kidEvents[se.kid_id][se.day] ??= []).push({
-      id: `se:${se.id}`,
-      title: se.kind === "drop" ? "Drop-off" : "Pickup",
+    const kind = se.kind === "drop" ? "drop" : "pickup";
+    const dayAcc = (acc[se.day] ??= {});
+    const slot = (dayAcc[kind] ??= {
       time: se.time ? se.time.slice(0, 5) : "",
-      color: "#d97706",
-      calendarLabel: who,
-      provider: "google",
+      whoToKids: new Map<string, string[]>(),
     });
-    kidEvents[se.kid_id][se.day].sort((a, b) => a.time.localeCompare(b.time));
+    const list = slot.whoToKids.get(who) ?? [];
+    const nm = kidName.get(se.kid_id);
+    if (nm) list.push(nm);
+    slot.whoToKids.set(who, list);
+  }
+  const schoolByDay: Record<string, SchoolDay> = {};
+  for (const [day, kinds] of Object.entries(acc)) {
+    const entry: SchoolDay = {};
+    for (const kind of ["drop", "pickup"] as const) {
+      const slot = kinds[kind];
+      if (!slot) continue;
+      entry[kind] = {
+        time: slot.time,
+        groups: [...slot.whoToKids.entries()].map(([who, kids]) => ({ who, kids })),
+      };
+    }
+    schoolByDay[day] = entry;
   }
 
   return (
@@ -232,8 +253,7 @@ export default async function Home({
         events={events}
         calendarsConfigured={calendarsConfigured}
         unreadByDay={unreadByDay}
-        kids={kids}
-        kidEvents={kidEvents}
+        schoolByDay={schoolByDay}
       />
     </>
   );
