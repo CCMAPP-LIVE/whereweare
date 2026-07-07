@@ -316,7 +316,7 @@ export default function SchoolView({
           onClick={() => setDefaultsOpen((x) => !x)}
           className="flex w-full items-center justify-between px-3 py-2 text-sm font-semibold"
         >
-          <span>Defaults ({defaults.length} rows)</span>
+          <span>Pickups ({defaults.length} rows)</span>
           <span className="text-neutral-400">{defaultsOpen ? "▲" : "▼"}</span>
         </button>
         {defaultsOpen && (
@@ -411,8 +411,131 @@ function DefaultsGrid({
   const map = new Map<string, SchoolDefault>(
     defaults.map((d) => [`${d.kidId}|${d.weekday}|${d.kind}`, d]),
   );
+
+  // "Both" is a shortcut editor while all kids run on the same schedule. It
+  // reads the shared value (blank when the kids differ) and dispatches writes
+  // to every real kid in parallel. Only meaningful with 2+ kids.
+  const showBoth = kids.length >= 2;
+
+  function bothTime(weekday: number, kind: "drop" | "pickup"): string {
+    const times = kids.map((k) => map.get(`${k.id}|${weekday}|${kind}`)?.time ?? "");
+    return times.every((t) => t === times[0]) ? times[0] : "";
+  }
+  function bothAssignee(weekday: number, kind: "drop" | "pickup"): string {
+    const assigns = kids.map(
+      (k) => map.get(`${k.id}|${weekday}|${kind}`)?.defaultAssigneeUserId ?? "",
+    );
+    return assigns.every((a) => a === assigns[0]) ? assigns[0] : "";
+  }
+  function bothPresent(weekday: number, kind: "drop" | "pickup"): boolean {
+    return kids.every((k) => map.has(`${k.id}|${weekday}|${kind}`));
+  }
+
+  function setBothTime(weekday: number, kind: "drop" | "pickup", time: string) {
+    for (const kid of kids) {
+      const d = map.get(`${kid.id}|${weekday}|${kind}`);
+      onUpsert({
+        kidId: kid.id,
+        weekday,
+        kind,
+        time,
+        defaultAssigneeUserId: d?.defaultAssigneeUserId ?? null,
+        active: true,
+      });
+    }
+  }
+  function setBothAssignee(
+    weekday: number,
+    kind: "drop" | "pickup",
+    assignee: string | null,
+  ) {
+    for (const kid of kids) {
+      const d = map.get(`${kid.id}|${weekday}|${kind}`);
+      onUpsert({
+        kidId: kid.id,
+        weekday,
+        kind,
+        time: d?.time ?? "08:00",
+        defaultAssigneeUserId: assignee,
+        active: true,
+      });
+    }
+  }
+  function clearBoth(weekday: number, kind: "drop" | "pickup") {
+    for (const kid of kids) {
+      if (map.has(`${kid.id}|${weekday}|${kind}`)) {
+        onDelete(kid.id, weekday, kind);
+      }
+    }
+  }
+
   return (
     <div className="space-y-4">
+      {showBoth && (
+        <div className="rounded-lg bg-amber-50/60 p-2 dark:bg-amber-950/20">
+          <h3 className="mb-1 text-sm font-semibold">
+            Both{" "}
+            <span className="text-[11px] font-normal text-neutral-500">
+              — fills every kid; blank if they differ
+            </span>
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-xs">
+              <thead>
+                <tr className="text-left text-neutral-500">
+                  <th className="pr-3 font-medium">Day</th>
+                  <th className="pr-3 font-medium">Drop-off</th>
+                  <th className="font-medium">Pickup</th>
+                </tr>
+              </thead>
+              <tbody>
+                {WEEKDAY_SHORT.slice(0, 5).map((label, weekday) => (
+                  <tr key={weekday} className="border-t border-amber-500/10">
+                    <td className="py-1 pr-3 font-medium">{label}</td>
+                    {(["drop", "pickup"] as const).map((kind) => (
+                      <td key={kind} className="py-1 pr-3">
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="time"
+                            value={bothTime(weekday, kind)}
+                            placeholder="--:--"
+                            onChange={(e) => setBothTime(weekday, kind, e.target.value)}
+                            className="w-[5.5rem] rounded-md bg-transparent px-1 py-0.5 text-neutral-700 focus:bg-white dark:text-neutral-200 dark:focus:bg-neutral-800"
+                          />
+                          <select
+                            value={bothAssignee(weekday, kind)}
+                            onChange={(e) =>
+                              setBothAssignee(weekday, kind, e.target.value || null)
+                            }
+                            className="rounded-md bg-transparent px-1 py-0.5 text-neutral-500 focus:bg-white dark:focus:bg-neutral-800"
+                          >
+                            <option value="">by …</option>
+                            {people.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name}
+                              </option>
+                            ))}
+                          </select>
+                          {bothPresent(weekday, kind) && (
+                            <button
+                              onClick={() => clearBoth(weekday, kind)}
+                              className="text-neutral-400 hover:text-red-600"
+                              title="Remove for all kids"
+                            >
+                              ×
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {kids.map((kid) => (
         <div key={kid.id}>
           <h3 className="mb-1 text-sm font-semibold">{kid.name}</h3>
