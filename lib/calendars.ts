@@ -45,6 +45,7 @@ export type CalendarRow = {
   summary: string | null;
   label: string | null;
   color: string | null;
+  enabled: boolean;
   is_primary: boolean;
 };
 
@@ -82,9 +83,9 @@ async function accountsForUser(
 }
 
 /**
- * Read + merge events from every calendar across every connected account for
- * a user. Resilient: a failing account/calendar yields no events rather than
- * throwing, so the page still renders availability.
+ * Read + merge events from every ENABLED calendar across every connected
+ * account for a user. Resilient: a failing account/calendar yields no events
+ * rather than throwing, so the page still renders availability.
  */
 export async function getEventsForUser(
   admin: Admin,
@@ -98,6 +99,7 @@ export async function getEventsForUser(
   const { data: cals } = await admin
     .from("calendars")
     .select("external_id, color, label, summary, calendar_account_id")
+    .eq("enabled", true)
     .in(
       "calendar_account_id",
       accounts.map((a) => a.id),
@@ -135,8 +137,9 @@ export async function getEventsForUser(
 }
 
 /**
- * Discover calendars from every connected account and upsert them. Every
- * calendar is shown, so there's nothing to preserve beyond identity.
+ * Discover calendars from every connected account and upsert them, preserving
+ * the user's existing `enabled` choice and defaulting a newly-seen primary
+ * calendar to enabled (secondary calendars start hidden until switched on).
  */
 export async function refreshCalendarsForUser(
   admin: Admin,
@@ -157,13 +160,23 @@ export async function refreshCalendarsForUser(
       continue;
     }
 
+    const { data: existing } = await admin
+      .from("calendars")
+      .select("external_id, enabled")
+      .eq("calendar_account_id", account.id);
+    const existingMap = new Map(
+      (existing ?? []).map((c) => [c.external_id, c.enabled]),
+    );
+
     const rows = discovered.map((c) => ({
       calendar_account_id: account.id,
       external_id: c.externalId,
       summary: c.summary,
       color: c.color,
       is_primary: c.isPrimary,
-      enabled: true,
+      enabled: existingMap.has(c.externalId)
+        ? existingMap.get(c.externalId)!
+        : c.isPrimary,
     }));
 
     if (rows.length > 0) {
@@ -189,7 +202,7 @@ export async function getAccountsWithCalendars(
   const ids = accounts.map((a) => a.id);
   const { data: cals } = await admin
     .from("calendars")
-    .select("id, summary, label, color, is_primary, calendar_account_id")
+    .select("id, summary, label, color, enabled, is_primary, calendar_account_id")
     .in("calendar_account_id", ids);
 
   const byAccount = new Map<string, CalendarRow[]>();
@@ -200,6 +213,7 @@ export async function getAccountsWithCalendars(
       summary: c.summary,
       label: c.label,
       color: c.color,
+      enabled: c.enabled,
       is_primary: c.is_primary,
     });
     byAccount.set(c.calendar_account_id, list);

@@ -15,6 +15,7 @@ type Cal = {
   summary: string | null;
   label: string | null;
   color: string | null;
+  enabled: boolean;
   is_primary: boolean;
 };
 type Account = {
@@ -79,7 +80,7 @@ export default async function SettingsPage() {
 
         <Section
           title="Connected accounts"
-          description="Connect as many accounts as you like — every calendar in each one shows up in the week view. Read-only — we never change your personal calendars."
+          description="Connect as many accounts as you like — pick which of their calendars show up below. Read-only — we never change your personal calendars."
         >
           {configError ? (
             <p className="text-sm text-amber-600">
@@ -98,8 +99,8 @@ export default async function SettingsPage() {
         </Section>
 
         <Section
-          title="Calendar labels"
-          description="Give each source calendar a name so you can tell events apart at a glance."
+          title="Calendars to show"
+          description="Tick which calendars appear in the week view, and give each one a name so you can tell events apart at a glance."
         >
           {configError ? (
             <p className="text-sm text-amber-600">

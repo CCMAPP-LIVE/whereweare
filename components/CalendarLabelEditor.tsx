@@ -7,6 +7,7 @@ type Cal = {
   summary: string | null;
   label: string | null;
   color: string | null;
+  enabled: boolean;
   is_primary: boolean;
 };
 type Account = {
@@ -16,11 +17,12 @@ type Account = {
   calendars: Cal[];
 };
 
-function LabelInput({ cal }: { cal: Cal }) {
+function CalendarRow({ cal }: { cal: Cal }) {
   const [value, setValue] = useState(cal.label ?? "");
   const [saved, setSaved] = useState(true);
+  const [enabled, setEnabled] = useState(cal.enabled);
 
-  async function save() {
+  async function saveLabel() {
     setSaved(true);
     await fetch("/api/calendars", {
       method: "POST",
@@ -29,8 +31,24 @@ function LabelInput({ cal }: { cal: Cal }) {
     }).catch(() => {});
   }
 
+  async function toggleEnabled() {
+    const next = !enabled;
+    setEnabled(next);
+    await fetch("/api/calendars", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ calendarId: cal.id, enabled: next }),
+    }).catch(() => {});
+  }
+
   return (
     <li className="flex items-center gap-2 rounded-lg px-2 py-1.5">
+      <input
+        type="checkbox"
+        checked={enabled}
+        onChange={toggleEnabled}
+        className="h-4 w-4 shrink-0 accent-teal-600"
+      />
       <span
         className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
         style={{ background: cal.color ?? "#9ca3af" }}
@@ -49,7 +67,7 @@ function LabelInput({ cal }: { cal: Cal }) {
           setValue(e.target.value);
           setSaved(false);
         }}
-        onBlur={save}
+        onBlur={saveLabel}
         className="min-w-0 flex-1 rounded-md border border-black/10 bg-transparent px-2 py-1 text-sm outline-none focus:border-teal-600 dark:border-white/10"
       />
       {!saved && <span className="shrink-0 text-[10px] text-neutral-400">Saving…</span>}
@@ -77,7 +95,7 @@ export default function CalendarLabelEditor({ accounts }: { accounts: Account[] 
             {[...acc.calendars]
               .sort((a, b) => Number(b.is_primary) - Number(a.is_primary))
               .map((cal) => (
-                <LabelInput key={cal.id} cal={cal} />
+                <CalendarRow key={cal.id} cal={cal} />
               ))}
           </ul>
         </div>
