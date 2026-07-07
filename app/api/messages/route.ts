@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushToUser } from "@/lib/push/send";
-import { dayLabel } from "@/lib/time";
+import { tagLabel, tagHref } from "@/lib/time";
 
 const BODY_MAX = 2000;
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const PERIODS = ["day", "week", "month"];
 
 export async function GET() {
   const supabase = await createClient();
@@ -16,7 +17,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("messages")
-    .select("id, sender_id, recipient_id, body, day, created_at, read_at")
+    .select("id, sender_id, recipient_id, body, day, period, created_at, read_at")
     .order("created_at", { ascending: true })
     .limit(200);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -40,6 +41,10 @@ export async function POST(request: Request) {
     typeof requestBody.day === "string" && DAY_RE.test(requestBody.day)
       ? requestBody.day
       : null;
+  const period =
+    day && typeof requestBody.period === "string" && PERIODS.includes(requestBody.period)
+      ? requestBody.period
+      : null;
 
   const admin = createAdminClient();
 
@@ -62,17 +67,17 @@ export async function POST(request: Request) {
 
   const { data: inserted, error } = await admin
     .from("messages")
-    .insert({ sender_id: user.id, recipient_id: recipient.id, body, day })
-    .select("id, sender_id, recipient_id, body, day, created_at, read_at")
+    .insert({ sender_id: user.id, recipient_id: recipient.id, body, day, period })
+    .select("id, sender_id, recipient_id, body, day, period, created_at, read_at")
     .single();
   if (error || !inserted)
     return NextResponse.json({ error: error?.message ?? "insert failed" }, { status: 500 });
 
   const title = sender?.display_name?.trim() || "New message";
   await sendPushToUser(admin, recipient.id, {
-    title: day ? `${title} · ${dayLabel(day).weekday} ${dayLabel(day).date}` : title,
+    title: day ? `${title} · ${tagLabel(day, period)}` : title,
     body,
-    url: day ? `/plan?date=${day}` : "/messages",
+    url: day ? tagHref(day, period) : "/messages",
   });
 
   return NextResponse.json({ ok: true, message: inserted });

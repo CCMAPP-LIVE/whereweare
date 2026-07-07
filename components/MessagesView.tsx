@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { dayLabel } from "@/lib/time";
+import { tagHref, tagLabel } from "@/lib/time";
 
 type Message = {
   id: string;
@@ -9,13 +9,20 @@ type Message = {
   recipient_id: string;
   body: string;
   day: string | null;
+  period: string | null;
   created_at: string;
   read_at: string | null;
 };
 
 type Person = { id: string; name: string };
+type Period = "day" | "week" | "month";
 
 const POLL_MS = 8000;
+const PERIODS: { value: Period; label: string }[] = [
+  { value: "day", label: "Day" },
+  { value: "week", label: "Week" },
+  { value: "month", label: "Month" },
+];
 
 export default function MessagesView({
   currentUserId,
@@ -24,6 +31,7 @@ export default function MessagesView({
   initialMessages,
   today,
   initialDay,
+  initialPeriod,
 }: {
   currentUserId: string;
   names: Record<string, string>;
@@ -31,10 +39,14 @@ export default function MessagesView({
   initialMessages: Message[];
   today: string;
   initialDay: string;
+  initialPeriod: string;
 }) {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [draft, setDraft] = useState("");
-  const [day, setDay] = useState(initialDay); // "" = no day tag
+  const [day, setDay] = useState(initialDay); // "" = no tag
+  const [period, setPeriod] = useState<Period>(
+    initialPeriod === "week" || initialPeriod === "month" ? initialPeriod : "day",
+  );
   const [recipientId, setRecipientId] = useState(people[0]?.id ?? "");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
@@ -78,7 +90,12 @@ export default function MessagesView({
       const res = await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body, day: day || undefined, recipientId }),
+        body: JSON.stringify({
+          body,
+          day: day || undefined,
+          period: day ? period : undefined,
+          recipientId,
+        }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -108,14 +125,14 @@ export default function MessagesView({
               <div className={`max-w-[75%] ${mine ? "items-end" : "items-start"} flex flex-col`}>
                 {m.day && (
                   <a
-                    href={`/plan?date=${m.day}`}
+                    href={tagHref(m.day, m.period)}
                     className={`mb-1 inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
                       mine
                         ? "bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300"
                         : "bg-black/10 text-neutral-700 dark:bg-white/10 dark:text-neutral-300"
                     }`}
                   >
-                    📅 {dayLabel(m.day).weekday} {dayLabel(m.day).date}
+                    📅 {tagLabel(m.day, m.period)}
                   </a>
                 )}
                 <div
@@ -172,9 +189,16 @@ export default function MessagesView({
           <span className="ml-2">About:</span>
           <button
             type="button"
-            onClick={() => setDay(day === today ? "" : today)}
+            onClick={() => {
+              if (day === today && period === "day") {
+                setDay("");
+              } else {
+                setDay(today);
+                setPeriod("day");
+              }
+            }}
             className={`rounded-full px-2 py-0.5 ${
-              day === today
+              day === today && period === "day"
                 ? "bg-teal-600 text-white"
                 : "bg-black/5 hover:bg-black/10 dark:bg-white/10 dark:hover:bg-white/20"
             }`}
@@ -188,13 +212,31 @@ export default function MessagesView({
             className="rounded-full border border-black/10 bg-transparent px-2 py-0.5 text-xs dark:border-white/10"
           />
           {day && (
-            <button
-              type="button"
-              onClick={() => setDay("")}
-              className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
-            >
-              clear
-            </button>
+            <>
+              <div className="inline-flex rounded-full border border-black/10 p-0.5 dark:border-white/10">
+                {PERIODS.map((p) => (
+                  <button
+                    key={p.value}
+                    type="button"
+                    onClick={() => setPeriod(p.value)}
+                    className={`rounded-full px-2 py-0.5 ${
+                      period === p.value
+                        ? "bg-teal-600 text-white"
+                        : "hover:bg-black/5 dark:hover:bg-white/10"
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => setDay("")}
+                className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
+              >
+                clear
+              </button>
+            </>
           )}
         </div>
         <div className="flex gap-2">

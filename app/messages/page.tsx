@@ -20,11 +20,15 @@ export default async function MessagesPage({
   const sp = await searchParams;
   const initialDay =
     typeof sp.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(sp.day) ? sp.day : "";
+  const initialPeriod =
+    initialDay && typeof sp.period === "string" && ["day", "week", "month"].includes(sp.period)
+      ? sp.period
+      : "day";
 
   const [{ data: messageRows }, { data: profileRows }] = await Promise.all([
     supabase
       .from("messages")
-      .select("id, sender_id, recipient_id, body, day, created_at, read_at")
+      .select("id, sender_id, recipient_id, body, day, period, created_at, read_at")
       .order("created_at", { ascending: true })
       .limit(200),
     supabase.from("profiles").select("id, display_name"),
@@ -47,6 +51,7 @@ export default async function MessagesPage({
         initialMessages={messageRows ?? []}
         today={londonToday()}
         initialDay={initialDay}
+        initialPeriod={initialPeriod}
       />
     </>
   );

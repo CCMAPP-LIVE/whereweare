@@ -311,6 +311,14 @@ function Toolbar({
             );
           })}
         </div>
+        <a
+          href={`/messages?day=${anchor}&period=${view}`}
+          aria-label={`Message about this ${view}`}
+          title={`Message about this ${view}`}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-black/10 text-base hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10 sm:h-8 sm:w-8"
+        >
+          💬
+        </a>
         <button
           onClick={onNewEvent}
           aria-label="Add event"

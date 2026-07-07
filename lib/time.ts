@@ -149,3 +149,15 @@ export function viewRangeLabel(
   const left = format(a, "MMM") === format(b, "MMM") ? format(a, "d") : format(a, "d MMM");
   return `${left} – ${format(b, "d MMM yyyy")}`;
 }
+
+/** Human label for a message's day/period tag, e.g. "Tue 8 Jul 2026" or "29 Jun – 5 Jul 2026". */
+export function tagLabel(day: DayKey, period: string | null): string {
+  const view: CalView = period === "week" || period === "month" ? period : "day";
+  return viewRangeLabel(view, day, daysForView(view, day));
+}
+
+/** Where tapping a message's day/period tag should go. */
+export function tagHref(day: DayKey, period: string | null): string {
+  if (period === "month") return `/?view=month&date=${day}`;
+  return `/plan?date=${day}`;
+}
