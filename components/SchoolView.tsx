@@ -274,7 +274,7 @@ export default function SchoolView({
             disabled={generating || kids.length === 0}
             className="rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-50"
           >
-            {generating ? "Generating…" : "Fill this week from defaults"}
+            {generating ? "Generating…" : "Fill this week from Pickups"}
           </button>
           <p className="text-[11px] text-neutral-400">
             {notesSaving ? "Saving…" : "Only adds missing rows — your edits are safe."}
