@@ -37,6 +37,7 @@ function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
 type AccountWithToken = {
   id: string;
   provider: Provider;
+  account_email: string | null;
   refresh_token: string;
 };
 
@@ -63,7 +64,7 @@ async function accountsForUser(
 ): Promise<AccountWithToken[]> {
   const { data: accounts } = await admin
     .from("calendar_accounts")
-    .select("id, provider")
+    .select("id, provider, account_email")
     .eq("user_id", userId);
   if (!accounts?.length) return [];
 
@@ -78,7 +79,16 @@ async function accountsForUser(
 
   return accounts.flatMap((a) => {
     const refresh_token = tokenMap.get(a.id);
-    return refresh_token ? [{ id: a.id, provider: a.provider, refresh_token }] : [];
+    return refresh_token
+      ? [
+          {
+            id: a.id,
+            provider: a.provider,
+            account_email: a.account_email,
+            refresh_token,
+          },
+        ]
+      : [];
   });
 }
 
@@ -158,6 +168,27 @@ export async function refreshCalendarsForUser(
             );
     } catch {
       continue;
+    }
+
+    // Google's calendarList doesn't always include the account's OWN default
+    // calendar (e.g. a Workspace login whose primary was never added to its
+    // list). The literal id "primary" always resolves to it, so seed it here
+    // when no discovered calendar already matches the account's own address —
+    // otherwise the login account's events would never be showable.
+    if (
+      account.provider === "google" &&
+      !discovered.some(
+        (c) =>
+          c.externalId === "primary" ||
+          (account.account_email && c.externalId === account.account_email),
+      )
+    ) {
+      discovered.unshift({
+        externalId: "primary",
+        summary: account.account_email ?? "My calendar",
+        color: null,
+        isPrimary: true,
+      });
     }
 
     const { data: existing } = await admin
