@@ -262,12 +262,20 @@ export default function PlanView({
                     </span>
                   )}
                 </h2>
-                <button
-                  onClick={() => setEditing({ day, event: null })}
-                  className="rounded-lg border border-black/10 px-2 py-1 text-xs hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10"
-                >
-                  + Add event
-                </button>
+                <div className="flex gap-1.5">
+                  <a
+                    href={`/messages?day=${day}`}
+                    className="rounded-lg border border-black/10 px-2 py-1 text-xs hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10"
+                  >
+                    💬 Message
+                  </a>
+                  <button
+                    onClick={() => setEditing({ day, event: null })}
+                    className="rounded-lg border border-black/10 px-2 py-1 text-xs hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10"
+                  >
+                    + Add event
+                  </button>
+                </div>
               </header>
 
               {list.length === 0 ? (
