@@ -124,6 +124,19 @@ export default async function Home({
   const unreadByDay: Record<string, number> = {};
   for (const row of unreadRows ?? []) unreadByDay[row.day] = (unreadByDay[row.day] ?? 0) + 1;
 
+  // Total comment counts per day (read or unread) so every day with any
+  // discussion shows a badge, not just days with something unread.
+  const { data: commentRows } = await supabase
+    .from("messages")
+    .select("day")
+    .not("day", "is", null)
+    .gte("day", firstDay)
+    .lte("day", lastDay)
+    .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`);
+  const commentedByDay: Record<string, number> = {};
+  for (const row of commentRows ?? [])
+    if (row.day) commentedByDay[row.day] = (commentedByDay[row.day] ?? 0) + 1;
+
   // Calendar events (best-effort: needs service-role + provider setup).
   const events: Record<string, Record<string, EventLite[]>> = {};
   for (const p of people) events[p.id] = {};
@@ -253,6 +266,7 @@ export default async function Home({
         events={events}
         calendarsConfigured={calendarsConfigured}
         unreadByDay={unreadByDay}
+        commentedByDay={commentedByDay}
         schoolByDay={schoolByDay}
       />
     </>

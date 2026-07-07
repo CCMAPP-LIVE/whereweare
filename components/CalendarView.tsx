@@ -44,6 +44,7 @@ type Props = {
   events: EventsMap;
   calendarsConfigured: boolean;
   unreadByDay: Record<string, number>;
+  commentedByDay: Record<string, number>;
   schoolByDay: Record<string, SchoolDay>;
 };
 
@@ -65,6 +66,7 @@ export default function CalendarView({
   events,
   calendarsConfigured,
   unreadByDay,
+  commentedByDay,
   schoolByDay,
 }: Props) {
   const [avail, setAvail] = useState<AvailabilityMap>(availability);
@@ -206,6 +208,7 @@ export default function CalendarView({
             avail={avail}
             events={events}
             schoolByDay={schoolByDay}
+            commentedByDay={commentedByDay}
             onPickDay={(day) => navigate("day", day)}
           />
         ) : (
@@ -221,6 +224,7 @@ export default function CalendarView({
                 dayTimes={dayTimes}
                 events={events}
                 school={schoolByDay[day]}
+                commentCount={commentedByDay[day] ?? 0}
                 unreadCount={unread[day] ?? 0}
                 onEdit={() => setEditing(day)}
                 onComment={() => setCommentsDay(day)}
@@ -405,6 +409,7 @@ function DayCard({
   dayTimes,
   events,
   school,
+  commentCount,
   unreadCount,
   onEdit,
   onComment,
@@ -418,6 +423,7 @@ function DayCard({
   dayTimes: TimesMap;
   events: EventsMap;
   school?: SchoolDay;
+  commentCount: number;
   unreadCount: number;
   onEdit: () => void;
   onComment: () => void;
@@ -445,10 +451,22 @@ function DayCard({
         <div className="flex items-center gap-1">
           <button
             onClick={onComment}
-            aria-label="Comment on this day"
-            className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/30"
+            aria-label={
+              commentCount > 0
+                ? `${commentCount} comment${commentCount === 1 ? "" : "s"}${unreadCount > 0 ? `, ${unreadCount} unread` : ""}`
+                : "Comment on this day"
+            }
+            className={`relative flex items-center gap-1 rounded-lg px-2 py-1 text-xs hover:bg-teal-50 dark:hover:bg-teal-950/30 ${
+              commentCount > 0
+                ? "text-teal-600"
+                : "text-neutral-300 dark:text-neutral-600"
+            }`}
           >
-            💬{unreadCount > 0 && ` ${unreadCount}`}
+            <span aria-hidden>💬</span>
+            {commentCount > 0 && <span className="font-medium">{commentCount}</span>}
+            {unreadCount > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white dark:ring-neutral-900" />
+            )}
           </button>
           {/* Details/Notes button — bigger tap target than the old text link, and
               only surfaces the sheet when you need notes or out/back times. */}
@@ -654,6 +672,7 @@ function MonthGrid({
   avail,
   events,
   schoolByDay,
+  commentedByDay,
   onPickDay,
 }: {
   days: string[];
@@ -663,6 +682,7 @@ function MonthGrid({
   avail: AvailabilityMap;
   events: EventsMap;
   schoolByDay: Record<string, SchoolDay>;
+  commentedByDay: Record<string, number>;
   onPickDay: (day: string) => void;
 }) {
   const anchorMonth = anchor.slice(0, 7);
@@ -687,13 +707,20 @@ function MonthGrid({
                   : "border-black/10 dark:border-white/10"
               } ${inMonth ? "" : "opacity-40"}`}
             >
-              <span
-                className={`text-xs ${
-                  isToday ? "font-semibold text-teal-600" : "text-neutral-500"
-                }`}
-              >
-                {Number(day.slice(8, 10))}
-              </span>
+              <div className="flex items-center justify-between">
+                <span
+                  className={`text-xs ${
+                    isToday ? "font-semibold text-teal-600" : "text-neutral-500"
+                  }`}
+                >
+                  {Number(day.slice(8, 10))}
+                </span>
+                {(commentedByDay[day] ?? 0) > 0 && (
+                  <span className="text-[9px] leading-none" aria-hidden title="Has comments">
+                    💬
+                  </span>
+                )}
+              </div>
               <div className="flex flex-col gap-0.5">
                 {people.map((p) => {
                   const hasEvents = (events[p.id]?.[day]?.length ?? 0) > 0;
