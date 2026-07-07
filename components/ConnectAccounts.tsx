@@ -50,26 +50,25 @@ export default function ConnectAccounts({ accounts }: { accounts: Account[] }) {
 
   async function connect(provider: "google" | "azure", label: string) {
     setBusy(label);
+    // Google uses a dedicated OAuth flow (not Supabase linkIdentity), so more
+    // than one Google account can be connected per login.
+    if (provider === "google") {
+      window.location.href = "/api/connect-google";
+      return;
+    }
+    // Microsoft still uses Supabase linkIdentity.
     const supabase = createClient();
-    const providerParam = provider === "azure" ? "microsoft" : "google";
-    // `select_account` forces the provider's account chooser, so you can add a
-    // *different* account rather than silently re-linking the one you're in.
-    const queryParams: Record<string, string> =
-      provider === "google"
-        ? { access_type: "offline", prompt: "select_account consent" }
-        : { prompt: "select_account" };
     const options = {
-      scopes:
-        provider === "google"
-          ? "https://www.googleapis.com/auth/calendar.readonly"
-          : "openid email offline_access Calendars.Read",
-      queryParams,
-      redirectTo: `${location.origin}/auth/callback?provider=${providerParam}&next=/settings`,
+      scopes: "openid email offline_access Calendars.Read",
+      // `select_account` forces the account chooser so you can add a different
+      // account rather than silently re-linking the one you're in.
+      queryParams: { prompt: "select_account" },
+      redirectTo: `${location.origin}/auth/callback?provider=microsoft&next=/settings`,
     };
     const { error } = await supabase.auth.linkIdentity({ provider, options });
     if (error) {
       setBusy(null);
-      alert(`Couldn't start connecting ${providerParam}: ${error.message}`);
+      alert(`Couldn't start connecting microsoft: ${error.message}`);
     }
   }
 
