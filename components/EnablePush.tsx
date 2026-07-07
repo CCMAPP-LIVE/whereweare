@@ -49,7 +49,7 @@ export default function EnablePush() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ subscription: sub.toJSON() }),
       });
-      setStatus(res.ok ? "Reminders enabled on this device ✓" : "Could not save subscription.");
+      setStatus(res.ok ? "Notifications enabled on this device ✓" : "Could not save subscription.");
     } catch (e) {
       setStatus(`Error: ${(e as Error).message}`);
     }
@@ -67,7 +67,7 @@ export default function EnablePush() {
     return (
       <div className="rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
         On iPhone, add this app to your Home Screen first (Share → Add to Home
-        Screen), then open it from there and come back to enable reminders.
+        Screen), then open it from there and come back to enable notifications.
       </div>
     );
   }
@@ -78,7 +78,7 @@ export default function EnablePush() {
         onClick={enable}
         className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700"
       >
-        Enable weekly reminders on this device
+        Enable notifications on this device
       </button>
       {status && <p className="text-sm text-neutral-500">{status}</p>}
     </div>

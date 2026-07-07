@@ -113,8 +113,8 @@ export default async function SettingsPage() {
         </Section>
 
         <Section
-          title="Weekly reminder"
-          description="A push notification each Sunday evening to update where you’ll be."
+          title="Notifications"
+          description="Get a push notification on this device when the other person comments on a day, plus a Sunday-evening reminder to update where you’ll be. Each person must enable this on their own phone. On iPhone, add the app to your Home Screen first."
         >
           <EnablePush />
         </Section>
