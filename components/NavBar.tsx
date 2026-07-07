@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { APP_NAME } from "@/lib/constants";
+import CommentsNavBadge from "@/components/CommentsNavBadge";
 
 export default function NavBar() {
   return (
@@ -36,12 +37,7 @@ export default function NavBar() {
         >
           School
         </Link>
-        <Link
-          href="/messages"
-          className="whitespace-nowrap rounded-lg px-2.5 py-1.5 hover:bg-black/5 dark:hover:bg-white/10"
-        >
-          Messages
-        </Link>
+        <CommentsNavBadge />
         <Link
           href="/users"
           className="whitespace-nowrap rounded-lg px-2.5 py-1.5 hover:bg-black/5 dark:hover:bg-white/10"

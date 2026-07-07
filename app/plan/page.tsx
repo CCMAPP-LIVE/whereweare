@@ -27,6 +27,7 @@ export default async function PlanPage({
   const days = daysForView("week", anchor);
   const weekStart = weekStartOf(anchor);
   const today = londonToday();
+  const initialCommentsDay = sp.comments === "1" ? anchor : null;
 
   const { data: profiles } = await supabase
     .from("profiles")
@@ -82,6 +83,16 @@ export default async function PlanPage({
     nextWeek: noteRow?.next_week_note ?? "",
   };
 
+  const { data: unreadRows } = await supabase
+    .from("messages")
+    .select("day")
+    .eq("recipient_id", user.id)
+    .is("read_at", null)
+    .gte("day", firstDay)
+    .lte("day", lastDay);
+  const unreadByDay: Record<string, number> = {};
+  for (const row of unreadRows ?? []) unreadByDay[row.day] = (unreadByDay[row.day] ?? 0) + 1;
+
   return (
     <>
       <NavBar />
@@ -94,6 +105,8 @@ export default async function PlanPage({
         anchor={anchor}
         initialEvents={events}
         initialNotes={notes}
+        unreadByDay={unreadByDay}
+        initialCommentsDay={initialCommentsDay}
       />
     </>
   );

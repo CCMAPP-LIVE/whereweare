@@ -6,6 +6,7 @@ import { SLOTS, STATUSES, STATUS_MAP } from "@/lib/constants";
 import { dayLabel, shiftAnchor, viewRangeLabel, type CalView } from "@/lib/time";
 import type { Slot, Status } from "@/lib/types";
 import NewEventModal from "@/components/NewEventModal";
+import DayComments from "@/components/DayComments";
 
 export type EventLite = {
   id: string;
@@ -34,6 +35,7 @@ type Props = {
   times: TimesMap;
   events: EventsMap;
   calendarsConfigured: boolean;
+  unreadByDay: Record<string, number>;
 };
 
 const VIEWS: { value: CalView; label: string }[] = [
@@ -53,19 +55,35 @@ export default function CalendarView({
   times,
   events,
   calendarsConfigured,
+  unreadByDay,
 }: Props) {
   const [avail, setAvail] = useState<AvailabilityMap>(availability);
   const [dayTimes, setDayTimes] = useState<TimesMap>(times);
   const [editing, setEditing] = useState<string | null>(null);
   const [addingEvent, setAddingEvent] = useState(false);
+  const [unread, setUnread] = useState<Record<string, number>>(unreadByDay);
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+
+  function markDayRead(day: string) {
+    setUnread((cur) => {
+      if (!cur[day]) return cur;
+      const next = { ...cur };
+      delete next[day];
+      return next;
+    });
+  }
 
   const orderedPeople = useMemo(() => {
     const me = people.find((p) => p.id === currentUserId);
     const others = people.filter((p) => p.id !== currentUserId);
     return me ? [me, ...others] : people;
   }, [people, currentUserId]);
+
+  const names = useMemo(
+    () => Object.fromEntries(people.map((p) => [p.id, p.name] as const)),
+    [people],
+  );
 
   function navigate(nextView: CalView, nextAnchor: string) {
     startTransition(() => {
@@ -190,6 +208,7 @@ export default function CalendarView({
                 avail={avail}
                 dayTimes={dayTimes}
                 events={events}
+                unreadCount={unread[day] ?? 0}
                 onEdit={() => setEditing(day)}
                 onCycleSlot={(slot) => cycleSlot(day, slot)}
               />
@@ -205,8 +224,11 @@ export default function CalendarView({
           initialTimes={
             dayTimes[currentUserId]?.[editing] ?? { leave: null, return: null }
           }
+          currentUserId={currentUserId}
+          names={names}
           onClose={() => setEditing(null)}
           onSave={(slots, t) => saveDay(editing, slots, t)}
+          onCommentsRead={markDayRead}
         />
       )}
 
@@ -311,14 +333,6 @@ function Toolbar({
             );
           })}
         </div>
-        <a
-          href={`/messages?day=${anchor}&period=${view}`}
-          aria-label={`Message about this ${view}`}
-          title={`Message about this ${view}`}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-black/10 text-base hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10 sm:h-8 sm:w-8"
-        >
-          💬
-        </a>
         <button
           onClick={onNewEvent}
           aria-label="Add event"
@@ -369,6 +383,7 @@ function DayCard({
   avail,
   dayTimes,
   events,
+  unreadCount,
   onEdit,
   onCycleSlot,
 }: {
@@ -379,6 +394,7 @@ function DayCard({
   avail: AvailabilityMap;
   dayTimes: TimesMap;
   events: EventsMap;
+  unreadCount: number;
   onEdit: () => void;
   onCycleSlot: (slot: Slot) => void;
 }) {
@@ -406,8 +422,13 @@ function DayCard({
         <button
           onClick={onEdit}
           aria-label="Edit day details"
-          className="rounded-lg px-2 py-1 text-xs text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/30"
+          className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/30"
         >
+          {unreadCount > 0 && (
+            <span className="rounded-full bg-teal-600 px-1.5 py-0.5 text-[10px] font-medium text-white">
+              💬 {unreadCount}
+            </span>
+          )}
           Notes …
         </button>
       </div>
@@ -660,14 +681,20 @@ function DayEditor({
   day,
   initialSlots,
   initialTimes,
+  currentUserId,
+  names,
   onClose,
   onSave,
+  onCommentsRead,
 }: {
   day: string;
   initialSlots: DaySlots;
   initialTimes: DayTimes;
+  currentUserId: string;
+  names: Record<string, string>;
   onClose: () => void;
   onSave: (slots: DaySlots, times: DayTimes) => void;
+  onCommentsRead: (day: string) => void;
 }) {
   const [draft, setDraft] = useState<DaySlots>(() => ({ ...initialSlots }));
   const [leave, setLeave] = useState<string>(initialTimes.leave ?? "");
@@ -810,6 +837,15 @@ function DayEditor({
         >
           Save
         </button>
+
+        <div className="mt-4">
+          <DayComments
+            day={day}
+            currentUserId={currentUserId}
+            names={names}
+            onRead={onCommentsRead}
+          />
+        </div>
       </div>
     </div>
   );

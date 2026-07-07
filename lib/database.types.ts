@@ -297,9 +297,8 @@ export type Database = {
         Row: {
           body: string
           created_at: string
-          day: string | null
+          day: string
           id: string
-          period: string | null
           read_at: string | null
           recipient_id: string
           sender_id: string
@@ -307,9 +306,8 @@ export type Database = {
         Insert: {
           body: string
           created_at?: string
-          day?: string | null
+          day: string
           id?: string
-          period?: string | null
           read_at?: string | null
           recipient_id: string
           sender_id: string
@@ -317,9 +315,8 @@ export type Database = {
         Update: {
           body?: string
           created_at?: string
-          day?: string | null
+          day?: string
           id?: string
-          period?: string | null
           read_at?: string | null
           recipient_id?: string
           sender_id?: string

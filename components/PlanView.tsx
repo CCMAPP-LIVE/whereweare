@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { dayLabel, shiftAnchor } from "@/lib/time";
+import DayComments from "@/components/DayComments";
 
 export type WeekEvent = {
   id: string;
@@ -34,6 +35,8 @@ type Props = {
   anchor: string;
   initialEvents: WeekEvent[];
   initialNotes: WeekNotes;
+  unreadByDay: Record<string, number>;
+  initialCommentsDay?: string | null;
 };
 
 export default function PlanView({
@@ -45,18 +48,36 @@ export default function PlanView({
   anchor,
   initialEvents,
   initialNotes,
+  unreadByDay,
+  initialCommentsDay,
 }: Props) {
   const [events, setEvents] = useState<WeekEvent[]>(initialEvents);
   const [notes, setNotes] = useState<WeekNotes>(initialNotes);
   const [editing, setEditing] = useState<{ day: string; event: WeekEvent | null } | null>(null);
+  const [commentsDay, setCommentsDay] = useState<string | null>(initialCommentsDay ?? null);
+  const [unread, setUnread] = useState<Record<string, number>>(unreadByDay);
   const [notesSaving, setNotesSaving] = useState(false);
   const router = useRouter();
   const [, startTransition] = useTransition();
+
+  function markDayRead(day: string) {
+    setUnread((cur) => {
+      if (!cur[day]) return cur;
+      const next = { ...cur };
+      delete next[day];
+      return next;
+    });
+  }
 
   const nameOf = useMemo(() => {
     const map = new Map(people.map((p) => [p.id, p.name] as const));
     return (userId: string | null) => (userId ? map.get(userId) ?? null : null);
   }, [people]);
+
+  const names = useMemo(
+    () => Object.fromEntries(people.map((p) => [p.id, p.name] as const)),
+    [people],
+  );
 
   const kidNamesOf = useMemo(() => {
     const map = new Map(kids.map((k) => [k.id, k.name] as const));
@@ -263,12 +284,17 @@ export default function PlanView({
                   )}
                 </h2>
                 <div className="flex gap-1.5">
-                  <a
-                    href={`/messages?day=${day}`}
-                    className="rounded-lg border border-black/10 px-2 py-1 text-xs hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10"
+                  <button
+                    onClick={() => setCommentsDay(day)}
+                    className="flex items-center gap-1 rounded-lg border border-black/10 px-2 py-1 text-xs hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10"
                   >
-                    💬 Message
-                  </a>
+                    💬 Comments
+                    {unread[day] > 0 && (
+                      <span className="rounded-full bg-teal-600 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                        {unread[day]}
+                      </span>
+                    )}
+                  </button>
                   <button
                     onClick={() => setEditing({ day, event: null })}
                     className="rounded-lg border border-black/10 px-2 py-1 text-xs hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10"
@@ -339,6 +365,37 @@ export default function PlanView({
           onSave={saveEvent}
           onDelete={deleteEvent}
         />
+      )}
+
+      {commentsDay && (
+        <div
+          className="fixed inset-0 z-30 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
+          onClick={() => setCommentsDay(null)}
+        >
+          <div
+            className="pb-safe max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-4 shadow-xl dark:bg-neutral-900 sm:rounded-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="font-semibold">
+                {dayLabel(commentsDay).weekday}{" "}
+                <span className="text-neutral-400">{dayLabel(commentsDay).date}</span>
+              </h3>
+              <button
+                onClick={() => setCommentsDay(null)}
+                className="text-sm text-neutral-400"
+              >
+                Close
+              </button>
+            </div>
+            <DayComments
+              day={commentsDay}
+              currentUserId={currentUserId}
+              names={names}
+              onRead={markDayRead}
+            />
+          </div>
+        </div>
       )}
     </main>
   );

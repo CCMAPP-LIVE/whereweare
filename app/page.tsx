@@ -110,6 +110,17 @@ export default async function Home({
     };
   }
 
+  // Unread comment counts per day, for badges on this user's visible range.
+  const { data: unreadRows } = await supabase
+    .from("messages")
+    .select("day")
+    .eq("recipient_id", user.id)
+    .is("read_at", null)
+    .gte("day", firstDay)
+    .lte("day", lastDay);
+  const unreadByDay: Record<string, number> = {};
+  for (const row of unreadRows ?? []) unreadByDay[row.day] = (unreadByDay[row.day] ?? 0) + 1;
+
   // Calendar events (best-effort: needs service-role + provider setup).
   const events: Record<string, Record<string, EventLite[]>> = {};
   for (const p of people) events[p.id] = {};
@@ -163,6 +174,7 @@ export default async function Home({
         times={times}
         events={events}
         calendarsConfigured={calendarsConfigured}
+        unreadByDay={unreadByDay}
       />
     </>
   );
