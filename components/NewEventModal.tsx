@@ -29,12 +29,12 @@ export default function NewEventModal({ defaultDate, onClose, onCreated }: Props
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch("/api/events", {
+      const res = await fetch("/api/week-events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: title.trim(),
-          date,
+          day: date,
           startTime: allDay ? null : startTime,
           endTime: allDay ? null : endTime,
           notes: notes.trim() || null,
@@ -159,11 +159,11 @@ export default function NewEventModal({ defaultDate, onClose, onCreated }: Props
           disabled={saving}
           className="mt-5 w-full rounded-xl bg-teal-600 px-4 py-2.5 font-medium text-white hover:bg-teal-700 disabled:opacity-50"
         >
-          {saving ? "Adding…" : "Add to Life Calendar"}
+          {saving ? "Adding…" : "Add event"}
         </button>
 
         <p className="mt-2 text-center text-[11px] text-neutral-400">
-          Adds to the shared Life Calendar on Google Calendar
+          Shows here for both of you and syncs to the shared Life Calendar
         </p>
       </div>
     </div>

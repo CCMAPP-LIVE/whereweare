@@ -159,6 +159,27 @@ export default async function Home({
     calendarsConfigured = false; // SUPABASE_SERVICE_ROLE_KEY not set yet
   }
 
+  // In-app events created via the "+ Add event" button / the Plan page
+  // (week_events). Merged in so they show natively in the calendar without
+  // needing the Life calendar enabled for reading. Rendered under the creator.
+  const { data: weekEvents } = await supabase
+    .from("week_events")
+    .select("id, user_id, day, start_time, title")
+    .gte("day", firstDay)
+    .lte("day", lastDay);
+  for (const we of weekEvents ?? []) {
+    if (!events[we.user_id]) continue;
+    (events[we.user_id][we.day] ??= []).push({
+      id: `we:${we.id}`,
+      title: we.title,
+      time: we.start_time ? we.start_time.slice(0, 5) : "All day",
+      color: "#0d9488",
+      calendarLabel: "Added",
+      provider: "google",
+    });
+    events[we.user_id][we.day].sort((a, b) => a.time.localeCompare(b.time));
+  }
+
   return (
     <>
       <NavBar />
