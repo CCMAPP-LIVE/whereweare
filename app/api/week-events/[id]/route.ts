@@ -34,6 +34,8 @@ export async function PUT(request: Request, { params }: Params) {
     typeof body.assigneeUserId === "string" && body.assigneeUserId !== ""
       ? body.assigneeUserId
       : null;
+  const kidId: string | null =
+    typeof body.kidId === "string" && body.kidId !== "" ? body.kidId : null;
 
   if (!title) return NextResponse.json({ error: "title required" }, { status: 400 });
   if (!DAY_RE.test(day))
@@ -63,6 +65,7 @@ export async function PUT(request: Request, { params }: Params) {
       title,
       notes,
       assignee_user_id: assigneeUserId,
+      kid_id: kidId,
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
@@ -71,15 +74,20 @@ export async function PUT(request: Request, { params }: Params) {
   let lifeSynced = true;
   let warning: string | undefined;
   try {
-    const assigneeName = assigneeUserId
-      ? (
-          await admin
+    const [assigneeRes, kidRes] = await Promise.all([
+      assigneeUserId
+        ? admin
             .from("profiles")
             .select("display_name")
             .eq("id", assigneeUserId)
             .maybeSingle()
-        ).data?.display_name ?? null
-      : null;
+        : Promise.resolve({ data: null }),
+      kidId
+        ? admin.from("kids").select("name").eq("id", kidId).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
+    const assigneeName = assigneeRes.data?.display_name ?? null;
+    const kidName = kidRes.data?.name ?? null;
     const newGoogleEventId = await upsertWeekEventOnLifeCalendar({
       id,
       day,
@@ -87,6 +95,7 @@ export async function PUT(request: Request, { params }: Params) {
       endTime,
       title,
       notes,
+      kidName,
       assigneeName,
       googleEventId: existing.google_event_id,
     });

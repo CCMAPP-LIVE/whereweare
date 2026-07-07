@@ -16,6 +16,7 @@ export type WeekEventForSync = {
   endTime: string | null;
   title: string;
   notes: string | null;
+  kidName: string | null;
   assigneeName: string | null;
   googleEventId: string | null;
 };
@@ -25,7 +26,12 @@ function calendarClient() {
 }
 
 function buildEventBody(ev: WeekEventForSync) {
-  const summary = ev.assigneeName ? `${ev.title} — ${ev.assigneeName}` : ev.title;
+  // "<title> — <kidName> (<assigneeName>)"; each middle segment drops out when
+  // absent. Matches the whiteboard's "Drop 9:15 Bernie" / "Drop 4:00 Mommy"
+  // shape — kid is the subject, assignee is the doer.
+  let summary = ev.title;
+  if (ev.kidName) summary += ` — ${ev.kidName}`;
+  if (ev.assigneeName) summary += ` (${ev.assigneeName})`;
   const description = ev.notes || undefined;
 
   let start: { date: string } | { dateTime: string; timeZone: string };

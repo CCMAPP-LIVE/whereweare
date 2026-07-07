@@ -234,6 +234,30 @@ export type Database = {
           },
         ]
       }
+      kids: {
+        Row: {
+          color: string | null
+          created_at: string
+          id: string
+          name: string
+          sort_order: number
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          sort_order?: number
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
       life_calendar_sync: {
         Row: {
           day: string
@@ -330,6 +354,7 @@ export type Database = {
           end_time: string | null
           google_event_id: string | null
           id: string
+          kid_id: string | null
           notes: string | null
           start_time: string | null
           title: string
@@ -343,6 +368,7 @@ export type Database = {
           end_time?: string | null
           google_event_id?: string | null
           id?: string
+          kid_id?: string | null
           notes?: string | null
           start_time?: string | null
           title: string
@@ -356,13 +382,22 @@ export type Database = {
           end_time?: string | null
           google_event_id?: string | null
           id?: string
+          kid_id?: string | null
           notes?: string | null
           start_time?: string | null
           title?: string
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "week_events_kid_id_fkey"
+            columns: ["kid_id"]
+            isOneToOne: false
+            referencedRelation: "kids"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       week_notes: {
         Row: {

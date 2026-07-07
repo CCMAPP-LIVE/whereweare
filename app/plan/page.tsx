@@ -40,14 +40,20 @@ export default async function PlanPage({
   const firstDay = days[0];
   const lastDay = days[days.length - 1];
 
-  const { data: eventRows } = await supabase
-    .from("week_events")
-    .select(
-      "id, user_id, day, start_time, end_time, title, notes, assignee_user_id, google_event_id, updated_at",
-    )
-    .gte("day", firstDay)
-    .lte("day", lastDay)
-    .order("start_time", { ascending: true, nullsFirst: true });
+  const [{ data: eventRows }, { data: kidRows }] = await Promise.all([
+    supabase
+      .from("week_events")
+      .select(
+        "id, user_id, day, start_time, end_time, title, notes, assignee_user_id, kid_id, google_event_id, updated_at",
+      )
+      .gte("day", firstDay)
+      .lte("day", lastDay)
+      .order("start_time", { ascending: true, nullsFirst: true }),
+    supabase
+      .from("kids")
+      .select("id, name")
+      .order("sort_order", { ascending: true }),
+  ]);
 
   const events: WeekEvent[] = (eventRows ?? []).map((r) => ({
     id: r.id,
@@ -58,7 +64,10 @@ export default async function PlanPage({
     title: r.title,
     notes: r.notes,
     assigneeUserId: r.assignee_user_id,
+    kidId: r.kid_id,
   }));
+
+  const kids = (kidRows ?? []).map((k) => ({ id: k.id, name: k.name }));
 
   const { data: noteRow } = await supabase
     .from("week_notes")
@@ -79,6 +88,7 @@ export default async function PlanPage({
       <PlanView
         currentUserId={user.id}
         people={people}
+        kids={kids}
         days={days}
         today={today}
         anchor={anchor}

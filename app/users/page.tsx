@@ -7,6 +7,7 @@ import NavBar from "@/components/NavBar";
 import UserRow, { type ManagedUser } from "@/components/UserRow";
 import InviteForm from "@/components/InviteForm";
 import PendingInvites, { type PendingInvite } from "@/components/PendingInvites";
+import KidsManager, { type KidLite } from "@/components/KidsManager";
 
 export const dynamic = "force-dynamic";
 
@@ -32,15 +33,18 @@ export default async function UsersPage() {
 
   let rows: ManagedUser[] = [];
   let configError = false;
+  let kids: KidLite[] = [];
   try {
     const admin = createAdminClient();
-    const [{ data: list }, { data: profiles }, { data: accounts }, { data: subs }] =
+    const [{ data: list }, { data: profiles }, { data: accounts }, { data: subs }, { data: kidRows }] =
       await Promise.all([
         admin.auth.admin.listUsers(),
         admin.from("profiles").select("id, display_name"),
         admin.from("calendar_accounts").select("user_id, provider"),
         admin.from("push_subscriptions").select("user_id"),
+        admin.from("kids").select("id, name").order("sort_order", { ascending: true }),
       ]);
+    kids = (kidRows ?? []).map((k) => ({ id: k.id, name: k.name }));
 
     const nameMap = new Map((profiles ?? []).map((p) => [p.id, p.display_name]));
     const provMap = new Map<string, Set<string>>();
@@ -98,11 +102,22 @@ export default async function UsersPage() {
             Managing people needs the Supabase service-role key set (see README).
           </p>
         ) : (
-          <ul className="space-y-2">
-            {rows.map((r) => (
-              <UserRow key={r.id} user={r} isSelf={r.id === user.id} />
-            ))}
-          </ul>
+          <>
+            <ul className="space-y-2">
+              {rows.map((r) => (
+                <UserRow key={r.id} user={r} isSelf={r.id === user.id} />
+              ))}
+            </ul>
+
+            <section className="rounded-2xl border border-black/10 p-4 dark:border-white/10">
+              <h2 className="font-semibold">Kids</h2>
+              <p className="mb-3 mt-0.5 text-sm text-neutral-500">
+                Family members who aren't app users but show up as the subject
+                of events (e.g. Bernie for school drop-off).
+              </p>
+              <KidsManager initialKids={kids} />
+            </section>
+          </>
         )}
       </main>
     </>

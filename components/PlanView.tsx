@@ -13,6 +13,7 @@ export type WeekEvent = {
   title: string;
   notes: string | null;
   assigneeUserId: string | null;
+  kidId: string | null;
 };
 
 export type WeekNotes = {
@@ -22,10 +23,12 @@ export type WeekNotes = {
 };
 
 type Person = { id: string; name: string };
+type Kid = { id: string; name: string };
 
 type Props = {
   currentUserId: string;
   people: Person[];
+  kids: Kid[];
   days: string[];
   today: string;
   anchor: string;
@@ -36,6 +39,7 @@ type Props = {
 export default function PlanView({
   currentUserId,
   people,
+  kids,
   days,
   today,
   anchor,
@@ -53,6 +57,11 @@ export default function PlanView({
     const map = new Map(people.map((p) => [p.id, p.name] as const));
     return (userId: string | null) => (userId ? map.get(userId) ?? null : null);
   }, [people]);
+
+  const kidNameOf = useMemo(() => {
+    const map = new Map(kids.map((k) => [k.id, k.name] as const));
+    return (kidId: string | null) => (kidId ? map.get(kidId) ?? null : null);
+  }, [kids]);
 
   const eventsByDay = useMemo(() => {
     const map = new Map<string, WeekEvent[]>();
@@ -96,6 +105,7 @@ export default function PlanView({
     startTime: string | null;
     endTime: string | null;
     assigneeUserId: string | null;
+    kidId: string | null;
     notes: string | null;
   }) {
     const body = JSON.stringify({
@@ -104,6 +114,7 @@ export default function PlanView({
       startTime: input.startTime,
       endTime: input.endTime,
       assigneeUserId: input.assigneeUserId,
+      kidId: input.kidId,
       notes: input.notes,
     });
     if (input.id) {
@@ -122,6 +133,7 @@ export default function PlanView({
                 startTime: input.startTime,
                 endTime: input.endTime,
                 assigneeUserId: input.assigneeUserId,
+                kidId: input.kidId,
                 notes: input.notes,
               }
             : e,
@@ -145,6 +157,7 @@ export default function PlanView({
             startTime: input.startTime,
             endTime: input.endTime,
             assigneeUserId: input.assigneeUserId,
+            kidId: input.kidId,
             notes: input.notes,
           },
         ]);
@@ -271,9 +284,14 @@ export default function PlanView({
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-baseline gap-x-2">
                           <span className="font-medium">{ev.title}</span>
+                          {ev.kidId && (
+                            <span className="rounded-full bg-amber-200/70 px-1.5 py-0.5 text-[10px] text-amber-900 dark:bg-amber-500/20 dark:text-amber-200">
+                              {kidNameOf(ev.kidId) ?? "Kid"}
+                            </span>
+                          )}
                           {ev.assigneeUserId && (
                             <span className="rounded-full bg-white/60 px-1.5 py-0.5 text-[10px] text-neutral-600 dark:bg-white/10 dark:text-neutral-300">
-                              {nameOf(ev.assigneeUserId) ?? "Someone"}
+                              by {nameOf(ev.assigneeUserId) ?? "Someone"}
                             </span>
                           )}
                         </div>
@@ -303,6 +321,7 @@ export default function PlanView({
           day={editing.day}
           event={editing.event}
           people={people}
+          kids={kids}
           currentUserId={currentUserId}
           onClose={() => setEditing(null)}
           onSave={saveEvent}
@@ -317,6 +336,7 @@ function EventEditor({
   day,
   event,
   people,
+  kids,
   currentUserId,
   onClose,
   onSave,
@@ -325,6 +345,7 @@ function EventEditor({
   day: string;
   event: WeekEvent | null;
   people: Person[];
+  kids: Kid[];
   currentUserId: string;
   onClose: () => void;
   onSave: (input: {
@@ -334,6 +355,7 @@ function EventEditor({
     startTime: string | null;
     endTime: string | null;
     assigneeUserId: string | null;
+    kidId: string | null;
     notes: string | null;
   }) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
@@ -346,6 +368,7 @@ function EventEditor({
   const [assigneeUserId, setAssigneeUserId] = useState<string>(
     event?.assigneeUserId ?? currentUserId,
   );
+  const [kidId, setKidId] = useState<string>(event?.kidId ?? "");
   const [notes, setNotes] = useState(event?.notes ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -365,6 +388,7 @@ function EventEditor({
         startTime: allDay ? null : startTime,
         endTime: allDay ? null : endTime || null,
         assigneeUserId: assigneeUserId || null,
+        kidId: kidId || null,
         notes: notes.trim() || null,
       });
     } catch (e) {
@@ -406,24 +430,50 @@ function EventEditor({
             />
           </label>
 
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium uppercase text-neutral-400">
-              Who's doing it
-            </span>
-            <select
-              value={assigneeUserId ?? ""}
-              onChange={(e) => setAssigneeUserId(e.target.value)}
-              className="w-full rounded-lg border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
-            >
-              <option value="">Nobody in particular</option>
-              {people.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                  {p.id === currentUserId ? " (you)" : ""}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium uppercase text-neutral-400">
+                For which kid
+              </span>
+              <select
+                value={kidId}
+                onChange={(e) => setKidId(e.target.value)}
+                disabled={kids.length === 0}
+                className="w-full rounded-lg border border-black/10 bg-transparent px-3 py-2 text-sm disabled:opacity-50 dark:border-white/10"
+              >
+                <option value="">Nobody in particular</option>
+                {kids.map((k) => (
+                  <option key={k.id} value={k.id}>
+                    {k.name}
+                  </option>
+                ))}
+              </select>
+              {kids.length === 0 && (
+                <p className="mt-0.5 text-[11px] text-neutral-400">
+                  Add kids on the People page.
+                </p>
+              )}
+            </label>
+
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium uppercase text-neutral-400">
+                Who's doing it
+              </span>
+              <select
+                value={assigneeUserId ?? ""}
+                onChange={(e) => setAssigneeUserId(e.target.value)}
+                className="w-full rounded-lg border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+              >
+                <option value="">Nobody in particular</option>
+                {people.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                    {p.id === currentUserId ? " (you)" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
 
           <label className="block">
             <span className="mb-1 block text-xs font-medium uppercase text-neutral-400">
