@@ -180,66 +180,40 @@ export default async function Home({
     events[we.user_id][we.day].sort((a, b) => a.time.localeCompare(b.time));
   }
 
-  // School drop-offs / pickups (school_events), shown under the person doing
-  // the run, with the two kids grouped into one row (e.g. "Bernie & Percy
-  // drop-off"). Helper-run rows (e.g. Joy) fall back to their creator's row.
+  // School drop-offs / pickups (school_events), shown as their own kid rows
+  // (Bernie / Percy) with the person OR helper doing each run — so helper runs
+  // (e.g. Joy) are clearly visible instead of hidden under a parent.
   const [{ data: schoolEvents }, { data: kidRows }, { data: helperRows }] =
     await Promise.all([
       supabase
         .from("school_events")
-        .select("id, day, time, kind, kid_id, assignee_user_id, helper_id, created_by")
+        .select("id, day, time, kind, kid_id, assignee_user_id, helper_id")
         .gte("day", firstDay)
         .lte("day", lastDay),
       supabase.from("kids").select("id, name, sort_order").order("sort_order"),
       supabase.from("helpers").select("id, name"),
     ]);
-  const kidName = new Map((kidRows ?? []).map((k) => [k.id, k.name]));
   const helperName = new Map((helperRows ?? []).map((h) => [h.id, h.name]));
-
-  type SchoolGroup = {
-    rowUser: string;
-    day: string;
-    time: string;
-    kind: string;
-    helper: string | null;
-    kids: string[];
-  };
-  const schoolGroups = new Map<string, SchoolGroup>();
+  const profileName = new Map(people.map((p) => [p.id, p.name]));
+  const kids = (kidRows ?? []).map((k) => ({ id: k.id, name: k.name }));
+  const kidEvents: Record<string, Record<string, EventLite[]>> = {};
+  for (const k of kids) kidEvents[k.id] = {};
   for (const se of schoolEvents ?? []) {
-    const rowUser =
-      se.assignee_user_id && events[se.assignee_user_id]
-        ? se.assignee_user_id
-        : se.created_by && events[se.created_by]
-          ? se.created_by
-          : null;
-    if (!rowUser) continue;
-    const key = `${rowUser}|${se.day}|${se.time}|${se.kind}|${se.helper_id ?? ""}`;
-    const g =
-      schoolGroups.get(key) ??
-      ({
-        rowUser,
-        day: se.day,
-        time: se.time,
-        kind: se.kind,
-        helper: se.helper_id ? (helperName.get(se.helper_id) ?? null) : null,
-        kids: [],
-      } as SchoolGroup);
-    const name = kidName.get(se.kid_id);
-    if (name) g.kids.push(name);
-    schoolGroups.set(key, g);
-  }
-  for (const g of schoolGroups.values()) {
-    const verb = g.kind === "drop" ? "drop-off" : "pickup";
-    const title = `${g.kids.join(" & ")} ${verb}${g.helper ? ` (${g.helper})` : ""}`.trim();
-    (events[g.rowUser][g.day] ??= []).push({
-      id: `se:${g.rowUser}:${g.day}:${g.time}:${g.kind}`,
-      title,
-      time: g.time ? g.time.slice(0, 5) : "",
+    if (!kidEvents[se.kid_id]) continue;
+    const who = se.assignee_user_id
+      ? (profileName.get(se.assignee_user_id) ?? "?")
+      : se.helper_id
+        ? (helperName.get(se.helper_id) ?? "?")
+        : "—";
+    (kidEvents[se.kid_id][se.day] ??= []).push({
+      id: `se:${se.id}`,
+      title: se.kind === "drop" ? "Drop-off" : "Pickup",
+      time: se.time ? se.time.slice(0, 5) : "",
       color: "#d97706",
-      calendarLabel: "School",
+      calendarLabel: who,
       provider: "google",
     });
-    events[g.rowUser][g.day].sort((a, b) => a.time.localeCompare(b.time));
+    kidEvents[se.kid_id][se.day].sort((a, b) => a.time.localeCompare(b.time));
   }
 
   return (
@@ -258,6 +232,8 @@ export default async function Home({
         events={events}
         calendarsConfigured={calendarsConfigured}
         unreadByDay={unreadByDay}
+        kids={kids}
+        kidEvents={kidEvents}
       />
     </>
   );

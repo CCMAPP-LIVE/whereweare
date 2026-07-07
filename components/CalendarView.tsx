@@ -36,6 +36,8 @@ type Props = {
   events: EventsMap;
   calendarsConfigured: boolean;
   unreadByDay: Record<string, number>;
+  kids: { id: string; name: string }[];
+  kidEvents: EventsMap;
 };
 
 const VIEWS: { value: CalView; label: string }[] = [
@@ -56,6 +58,8 @@ export default function CalendarView({
   events,
   calendarsConfigured,
   unreadByDay,
+  kids,
+  kidEvents,
 }: Props) {
   const [avail, setAvail] = useState<AvailabilityMap>(availability);
   const [dayTimes, setDayTimes] = useState<TimesMap>(times);
@@ -195,6 +199,8 @@ export default function CalendarView({
             people={orderedPeople}
             avail={avail}
             events={events}
+            kids={kids}
+            kidEvents={kidEvents}
             onPickDay={(day) => navigate("day", day)}
           />
         ) : (
@@ -209,6 +215,8 @@ export default function CalendarView({
                 avail={avail}
                 dayTimes={dayTimes}
                 events={events}
+                kids={kids}
+                kidEvents={kidEvents}
                 unreadCount={unread[day] ?? 0}
                 onEdit={() => setEditing(day)}
                 onComment={() => setCommentsDay(day)}
@@ -392,6 +400,8 @@ function DayCard({
   avail,
   dayTimes,
   events,
+  kids,
+  kidEvents,
   unreadCount,
   onEdit,
   onComment,
@@ -404,6 +414,8 @@ function DayCard({
   avail: AvailabilityMap;
   dayTimes: TimesMap;
   events: EventsMap;
+  kids: { id: string; name: string }[];
+  kidEvents: EventsMap;
   unreadCount: number;
   onEdit: () => void;
   onComment: () => void;
@@ -485,6 +497,28 @@ function DayCard({
           );
         })}
       </div>
+
+      {/* Kid rows: school drop-offs / pickups, each tagged with who's doing it
+          (parent or helper like Joy). Only kids with a run that day appear. */}
+      {kids.some((k) => (kidEvents[k.id]?.[day]?.length ?? 0) > 0) && (
+        <div className="mt-3 border-t border-black/5 pt-2 dark:border-white/5">
+          <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-amber-600">
+            School run
+          </div>
+          <div className="flex flex-col gap-2 sm:grid sm:grid-cols-2 sm:gap-3">
+            {kids.map((k) => {
+              const kevs = kidEvents[k.id]?.[day] ?? [];
+              if (kevs.length === 0) return null;
+              return (
+                <div key={k.id} className="min-w-0">
+                  <span className="text-sm font-medium">{k.name}</span>
+                  <EventList items={kevs} />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -602,6 +636,8 @@ function MonthGrid({
   people,
   avail,
   events,
+  kids,
+  kidEvents,
   onPickDay,
 }: {
   days: string[];
@@ -610,6 +646,8 @@ function MonthGrid({
   people: { id: string; name: string }[];
   avail: AvailabilityMap;
   events: EventsMap;
+  kids: { id: string; name: string }[];
+  kidEvents: EventsMap;
   onPickDay: (day: string) => void;
 }) {
   const anchorMonth = anchor.slice(0, 7);
@@ -657,6 +695,21 @@ function MonthGrid({
                       {hasEvents && (
                         <span className="ml-auto h-1 w-1 shrink-0 rounded-full bg-neutral-400" />
                       )}
+                    </div>
+                  );
+                })}
+                {kids.map((k) => {
+                  if ((kidEvents[k.id]?.[day]?.length ?? 0) === 0) return null;
+                  return (
+                    <div
+                      key={k.id}
+                      className="flex items-center gap-1"
+                      title={`${k.name} school run`}
+                    >
+                      <span className="w-2.5 shrink-0 text-[8px] font-medium uppercase text-amber-500">
+                        {k.name.slice(0, 1)}
+                      </span>
+                      <span className="h-1 w-1 shrink-0 rounded-full bg-amber-500" />
                     </div>
                   );
                 })}
