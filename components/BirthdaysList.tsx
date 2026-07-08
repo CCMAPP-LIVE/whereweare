@@ -71,6 +71,24 @@ function ageNextBirthday(
   return nextYear - birthYear;
 }
 
+/** Current age today. Null if the birth year isn't set. If today is the
+ *  birthday, this equals ageNextBirthday. */
+function currentAge(
+  birthYear: number | null,
+  month: number,
+  day: number,
+  todayISO: string,
+): number | null {
+  if (!birthYear) return null;
+  const [ty, tm, td] = todayISO.split("-").map(Number);
+  // If this year's birthday has already happened (or is today), they've
+  // reached ty - birthYear; otherwise they're still one below.
+  const todayUTC = Date.UTC(ty, tm - 1, td);
+  const thisYearOccurrence = Date.UTC(ty, month - 1, day);
+  const hadBirthdayThisYear = thisYearOccurrence <= todayUTC;
+  return ty - birthYear - (hadBirthdayThisYear ? 0 : 1);
+}
+
 function pluralDays(n: number): string {
   if (n === 0) return "today 🎉";
   if (n === 1) return "tomorrow";
@@ -157,7 +175,8 @@ export default function BirthdaysList({
         <ul className="space-y-2">
           {sorted.map((b) => {
             const days = daysUntilBirthday(b.month, b.day, today);
-            const age = ageNextBirthday(b.year, b.month, b.day, today);
+            const ageNow = currentAge(b.year, b.month, b.day, today);
+            const ageNext = ageNextBirthday(b.year, b.month, b.day, today);
             return (
               <li
                 key={b.id}
@@ -167,12 +186,19 @@ export default function BirthdaysList({
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-baseline gap-x-2">
                       <span className="text-base font-semibold">{b.name}</span>
+                      {ageNow !== null && (
+                        <span className="rounded-full bg-teal-100 px-1.5 py-0.5 text-[10px] font-medium text-teal-800 dark:bg-teal-500/20 dark:text-teal-200">
+                          {ageNow}
+                        </span>
+                      )}
                       <span className="text-sm text-neutral-500">
                         {b.day} {MONTH_SHORT[b.month - 1]}
                       </span>
-                      {age !== null && (
+                      {ageNext !== null && (
                         <span className="text-xs text-neutral-400">
-                          {days === 0 ? `turns ${age}` : `will be ${age}`}
+                          {days === 0
+                            ? `turns ${ageNext} 🎉`
+                            : `turns ${ageNext} on next birthday`}
                         </span>
                       )}
                     </div>
