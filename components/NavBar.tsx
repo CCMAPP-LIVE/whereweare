@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { APP_NAME } from "@/lib/constants";
 import CommentsNavBadge from "@/components/CommentsNavBadge";
+import TodoNavBadge from "@/components/TodoNavBadge";
 
 export default function NavBar() {
   return (
@@ -37,12 +38,7 @@ export default function NavBar() {
         >
           School
         </Link>
-        <Link
-          href="/todos"
-          className="whitespace-nowrap rounded-lg px-2.5 py-1.5 hover:bg-black/5 dark:hover:bg-white/10"
-        >
-          To-do
-        </Link>
+        <TodoNavBadge />
         <CommentsNavBadge />
         <Link
           href="/users"

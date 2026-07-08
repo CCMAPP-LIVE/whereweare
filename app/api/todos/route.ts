@@ -56,3 +56,24 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ ok: true, todo: inserted });
 }
+
+// Bulk-clear a whole column (e.g. "Clear done"), so finished cards don't pile
+// up forever. Scoped to a single valid status; no status = nothing cleared.
+export async function DELETE(request: Request) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+  const body = await request.json().catch(() => ({}));
+  const status = body.status as TodoStatus;
+  if (!TODO_STATUSES.includes(status))
+    return NextResponse.json({ error: "invalid status" }, { status: 400 });
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("todos").delete().eq("status", status);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ ok: true });
+}

@@ -178,6 +178,25 @@ export default function TodoBoard({
     });
   }
 
+  function clearDone() {
+    const doneCount = todos.filter((t) => t.status === "done").length;
+    if (doneCount === 0) return;
+    if (!confirm(`Clear ${doneCount} done card${doneCount === 1 ? "" : "s"}?`))
+      return;
+    const prev = todos;
+    setTodos((cur) => cur.filter((t) => t.status !== "done"));
+    fetch("/api/todos", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "done" }),
+    }).then((res) => {
+      if (!res.ok) {
+        setTodos(prev);
+        setError("Couldn't clear the done cards.");
+      }
+    });
+  }
+
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col p-3 sm:p-5">
       <div className="mb-3 flex items-baseline justify-between gap-2">
@@ -225,6 +244,15 @@ export default function TodoBoard({
                 <span className="ml-auto text-xs text-neutral-400">
                   {cards.length}
                 </span>
+                {col.value === "done" && cards.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearDone}
+                    className="text-xs text-neutral-400 hover:text-red-600"
+                  >
+                    Clear
+                  </button>
+                )}
               </div>
 
               <div className="flex flex-col gap-2">
