@@ -236,6 +236,21 @@ export default async function Home({
       : se.helper_id
         ? (helperName.get(se.helper_id) ?? "?")
         : "—";
+
+    // Also drop this run onto the kid's own calendar row, tagged with who's
+    // doing it — so each child's row shows their school runs alongside their
+    // activities. (The prominent band below still gives the at-a-glance view.)
+    (kidEvents[se.kid_id] ??= {});
+    (kidEvents[se.kid_id][se.day] ??= []).push({
+      id: `se:${se.kid_id}:${se.day}:${se.kind}`,
+      title: se.kind === "drop" ? "Drop-off" : "Pick-up",
+      time: se.time ? se.time.slice(0, 5) : "",
+      color: "#d97706",
+      calendarLabel: who,
+      provider: "google",
+    });
+    kidEvents[se.kid_id][se.day].sort((a, b) => a.time.localeCompare(b.time));
+
     const kind = se.kind === "drop" ? "drop" : "pickup";
     const dayAcc = (acc[se.day] ??= {});
     const slot = (dayAcc[kind] ??= {
