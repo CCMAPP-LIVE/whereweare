@@ -200,7 +200,7 @@ export default function TodoBoard({
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col p-3 sm:p-5">
       <div className="mb-3 flex items-baseline justify-between gap-2">
-        <h1 className="text-lg font-semibold sm:text-xl">To-do</h1>
+        <h1 className="text-lg font-semibold sm:text-xl">The List</h1>
         <p className="text-xs text-neutral-500">
           A shared board — you both see and edit it.
         </p>
