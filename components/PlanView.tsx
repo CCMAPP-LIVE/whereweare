@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { dayLabel, shiftAnchor } from "@/lib/time";
 import DayCommentsModal from "@/components/DayCommentsModal";
+import { SCHOOL_DROP_TIMES, SCHOOL_PICKUP_TIMES } from "@/lib/constants";
 
 export type WeekEvent = {
   id: string;
@@ -436,11 +437,20 @@ function EventEditor({
   }) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }) {
+  const router = useRouter();
+  // Category only applies to NEW events — existing rows are already
+  // week_events so there's nothing to switch. Locking it to "general" on
+  // edit keeps the school-fields UI out of the way.
+  type Category = "general" | "school-drop" | "school-pickup";
+  const [category, setCategory] = useState<Category>("general");
   const [title, setTitle] = useState(event?.title ?? "");
   const [eventDay, setEventDay] = useState(event?.day ?? day);
   const [allDay, setAllDay] = useState(!event?.startTime);
   const [startTime, setStartTime] = useState(event?.startTime?.slice(0, 5) ?? "08:00");
   const [endTime, setEndTime] = useState(event?.endTime?.slice(0, 5) ?? "");
+  // School category: single kid, fixed time slot.
+  const [schoolKidId, setSchoolKidId] = useState<string>("");
+  const [schoolTime, setSchoolTime] = useState<string>("");
   // A single "who's doing it" value: a user id, "h:<helperId>", or "" (nobody).
   const [who, setWho] = useState<string>(
     event
@@ -454,30 +464,74 @@ function EventEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const isSchool = category === "school-drop" || category === "school-pickup";
+  const schoolTimes =
+    category === "school-drop" ? SCHOOL_DROP_TIMES : SCHOOL_PICKUP_TIMES;
+
   function toggleKid(id: string) {
     setKidIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
   }
 
   async function handleSave() {
-    if (!title.trim()) {
-      setError("Please enter a title.");
-      return;
-    }
-    setSaving(true);
     setError(null);
+
+    if (isSchool) {
+      if (!schoolKidId) {
+        setError("Please pick a kid.");
+        return;
+      }
+      if (!schoolTime) {
+        setError("Please pick a time.");
+        return;
+      }
+    } else {
+      if (!title.trim()) {
+        setError("Please enter a title.");
+        return;
+      }
+    }
+
+    setSaving(true);
     try {
-      const isHelper = who.startsWith("h:");
-      await onSave({
-        id: event?.id,
-        day: eventDay,
-        title: title.trim(),
-        startTime: allDay ? null : startTime,
-        endTime: allDay ? null : endTime || null,
-        assigneeUserId: isHelper ? null : who || null,
-        helperId: isHelper ? who.slice(2) : null,
-        kidIds,
-        notes: notes.trim() || null,
-      });
+      if (isSchool) {
+        // School events live on school_events, not week_events. POST directly
+        // and rely on router.refresh() to pull the new state — /plan won't
+        // show the row (school events aren't part of the week planner), but
+        // /school and the main calendar view will.
+        const isHelper = who.startsWith("h:");
+        const res = await fetch("/api/school-events", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            kidId: schoolKidId,
+            day: eventDay,
+            kind: category === "school-drop" ? "drop" : "pickup",
+            time: schoolTime,
+            assigneeUserId: isHelper ? null : who || null,
+            helperId: isHelper ? who.slice(2) : null,
+            notes: notes.trim() || null,
+          }),
+        });
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}));
+          throw new Error(d.error ?? `Error ${res.status}`);
+        }
+        router.refresh();
+        onClose();
+      } else {
+        const isHelper = who.startsWith("h:");
+        await onSave({
+          id: event?.id,
+          day: eventDay,
+          title: title.trim(),
+          startTime: allDay ? null : startTime,
+          endTime: allDay ? null : endTime || null,
+          assigneeUserId: isHelper ? null : who || null,
+          helperId: isHelper ? who.slice(2) : null,
+          kidIds,
+          notes: notes.trim() || null,
+        });
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -503,51 +557,146 @@ function EventEditor({
           </button>
         </div>
 
-        <div className="space-y-3">
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium uppercase text-neutral-400">
-              Title
-            </span>
-            <input
-              autoFocus
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. School drop-off, Dentist, Aquarium…"
-              className="w-full rounded-lg border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
-            />
-          </label>
-
-          <div>
-            <span className="mb-1 block text-xs font-medium uppercase text-neutral-400">
-              For which kids
-            </span>
-            {kids.length === 0 ? (
-              <p className="text-[11px] text-neutral-400">
-                Add kids on the People page first.
-              </p>
-            ) : (
-              <div className="flex flex-wrap gap-1.5">
-                {kids.map((k) => {
-                  const active = kidIds.includes(k.id);
-                  return (
-                    <button
-                      key={k.id}
-                      type="button"
-                      onClick={() => toggleKid(k.id)}
-                      className={
-                        "rounded-full border px-2.5 py-1 text-xs transition " +
-                        (active
-                          ? "border-amber-500 bg-amber-200/70 text-amber-900 dark:bg-amber-500/30 dark:text-amber-100"
-                          : "border-black/15 text-neutral-500 hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10")
-                      }
-                    >
-                      {k.name}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+        {!event && (
+          <div className="mb-4">
+            <div className="mb-1 text-xs font-medium uppercase text-neutral-400">
+              Category
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {(
+                [
+                  { value: "general", label: "General event" },
+                  { value: "school-drop", label: "🎒 School drop-off" },
+                  { value: "school-pickup", label: "🎒 School pickup" },
+                ] as { value: Category; label: string }[]
+              ).map((c) => {
+                const active = category === c.value;
+                return (
+                  <button
+                    key={c.value}
+                    type="button"
+                    onClick={() => {
+                      setCategory(c.value);
+                      setSchoolTime("");
+                    }}
+                    className={
+                      "rounded-full border px-2.5 py-1 text-xs transition " +
+                      (active
+                        ? "border-teal-600 bg-teal-600 text-white"
+                        : "border-black/15 text-neutral-500 hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10")
+                    }
+                  >
+                    {c.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
+        )}
+
+        <div className="space-y-3">
+          {!isSchool && (
+            <>
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium uppercase text-neutral-400">
+                  Title
+                </span>
+                <input
+                  autoFocus
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g. Dentist, Aquarium, Dinner…"
+                  className="w-full rounded-lg border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+                />
+              </label>
+
+              <div>
+                <span className="mb-1 block text-xs font-medium uppercase text-neutral-400">
+                  For which kids
+                </span>
+                {kids.length === 0 ? (
+                  <p className="text-[11px] text-neutral-400">
+                    Add kids on the People page first.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {kids.map((k) => {
+                      const active = kidIds.includes(k.id);
+                      return (
+                        <button
+                          key={k.id}
+                          type="button"
+                          onClick={() => toggleKid(k.id)}
+                          className={
+                            "rounded-full border px-2.5 py-1 text-xs transition " +
+                            (active
+                              ? "border-amber-500 bg-amber-200/70 text-amber-900 dark:bg-amber-500/30 dark:text-amber-100"
+                              : "border-black/15 text-neutral-500 hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10")
+                          }
+                        >
+                          {k.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {isSchool && (
+            <>
+              <div>
+                <span className="mb-1 block text-xs font-medium uppercase text-neutral-400">
+                  For which kid
+                </span>
+                {kids.length === 0 ? (
+                  <p className="text-[11px] text-neutral-400">
+                    Add a kid on the People page first.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {kids.map((k) => {
+                      const active = schoolKidId === k.id;
+                      return (
+                        <button
+                          key={k.id}
+                          type="button"
+                          onClick={() => setSchoolKidId(k.id)}
+                          className={
+                            "rounded-full border px-2.5 py-1 text-xs transition " +
+                            (active
+                              ? "border-amber-500 bg-amber-200/70 text-amber-900 dark:bg-amber-500/30 dark:text-amber-100"
+                              : "border-black/15 text-neutral-500 hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10")
+                          }
+                        >
+                          {k.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium uppercase text-neutral-400">
+                  Time
+                </span>
+                <select
+                  value={schoolTime}
+                  onChange={(e) => setSchoolTime(e.target.value)}
+                  className="w-full rounded-lg border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+                >
+                  <option value="">Pick a slot…</option>
+                  {schoolTimes.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </>
+          )}
 
           <label className="block">
             <span className="mb-1 block text-xs font-medium uppercase text-neutral-400">
