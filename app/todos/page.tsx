@@ -23,7 +23,7 @@ export default async function TodosPage() {
 
   const { data: rows } = await supabase
     .from("todos")
-    .select("id, title, status, position, assignee_user_id")
+    .select("id, title, status, position, assignee_user_ids")
     .order("position", { ascending: true })
     .order("created_at", { ascending: true });
 
@@ -32,7 +32,7 @@ export default async function TodosPage() {
     title: r.title,
     status: r.status as Todo["status"],
     position: r.position,
-    assigneeUserId: r.assignee_user_id,
+    assigneeUserIds: r.assignee_user_ids ?? [],
   }));
 
   return (

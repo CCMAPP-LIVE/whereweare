@@ -22,7 +22,7 @@ export async function PATCH(request: Request, { params }: Params) {
     title?: string;
     status?: TodoStatus;
     position?: number;
-    assignee_user_id?: string | null;
+    assignee_user_ids?: string[];
     updated_at: string;
   } = { updated_at: new Date().toISOString() };
 
@@ -46,11 +46,17 @@ export async function PATCH(request: Request, { params }: Params) {
     update.position = (last?.position ?? -1) + 1;
   }
 
-  if ("assigneeUserId" in body) {
-    update.assignee_user_id =
+  // Accept the new array shape; also honour the legacy single-id shape so old
+  // clients (or the cycle-chip transitional UI) can still write.
+  if (Array.isArray(body.assigneeUserIds)) {
+    update.assignee_user_ids = body.assigneeUserIds.filter(
+      (x: unknown): x is string => typeof x === "string" && x !== "",
+    );
+  } else if ("assigneeUserId" in body) {
+    update.assignee_user_ids =
       typeof body.assigneeUserId === "string" && body.assigneeUserId !== ""
-        ? body.assigneeUserId
-        : null;
+        ? [body.assigneeUserId]
+        : [];
   }
 
   const { error } = await admin.from("todos").update(update).eq("id", id);

@@ -18,10 +18,15 @@ export async function POST(request: Request) {
   const status: TodoStatus = TODO_STATUSES.includes(body.status)
     ? body.status
     : "todo";
-  const assigneeUserId: string | null =
-    typeof body.assigneeUserId === "string" && body.assigneeUserId !== ""
-      ? body.assigneeUserId
-      : null;
+  // Accept both new (assigneeUserIds: string[]) and legacy (assigneeUserId:
+  // string) shapes so any older client still works during a rollout.
+  const assigneeUserIds: string[] = Array.isArray(body.assigneeUserIds)
+    ? body.assigneeUserIds.filter(
+        (x: unknown): x is string => typeof x === "string" && x !== "",
+      )
+    : typeof body.assigneeUserId === "string" && body.assigneeUserId !== ""
+      ? [body.assigneeUserId]
+      : [];
 
   if (!title) return NextResponse.json({ error: "title required" }, { status: 400 });
 
@@ -43,10 +48,10 @@ export async function POST(request: Request) {
       title,
       status,
       position: nextPosition,
-      assignee_user_id: assigneeUserId,
+      assignee_user_ids: assigneeUserIds,
       created_by: user.id,
     })
-    .select("id, title, status, position, assignee_user_id, created_by")
+    .select("id, title, status, position, assignee_user_ids, created_by")
     .single();
   if (error || !inserted)
     return NextResponse.json(

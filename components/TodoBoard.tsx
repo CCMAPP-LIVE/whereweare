@@ -8,7 +8,7 @@ export type Todo = {
   title: string;
   status: TodoStatus;
   position: number;
-  assigneeUserId: string | null;
+  assigneeUserIds: string[];
 };
 
 type Person = { id: string; name: string };
@@ -49,11 +49,6 @@ export default function TodoBoard({
     return m;
   }, [people]);
 
-  // Cycle order for the one-tap assignee chip: unassigned → each person → back.
-  const assigneeCycle = useMemo<(string | null)[]>(
-    () => [null, ...people.map((p) => p.id)],
-    [people],
-  );
 
   const byStatus = useMemo(() => {
     const map: Record<TodoStatus, Todo[]> = { todo: [], doing: [], done: [] };
@@ -74,7 +69,7 @@ export default function TodoBoard({
       title: clean,
       status,
       position: bottomOf(todos, status),
-      assigneeUserId: null,
+      assigneeUserIds: [],
     };
     setTodos((cur) => [...cur, optimistic]);
     try {
@@ -97,7 +92,7 @@ export default function TodoBoard({
                 title: json.todo.title,
                 status: json.todo.status,
                 position: json.todo.position,
-                assigneeUserId: json.todo.assignee_user_id,
+                assigneeUserIds: json.todo.assignee_user_ids ?? [],
               }
             : t,
         ),
@@ -140,16 +135,18 @@ export default function TodoBoard({
     moveTo(id, STATUS_ORDER[idx]);
   }
 
-  function cycleAssignee(id: string) {
+  function toggleAssignee(id: string, personId: string) {
     const card = todos.find((t) => t.id === id);
     if (!card) return;
-    const i = assigneeCycle.indexOf(card.assigneeUserId ?? null);
-    const next = assigneeCycle[(i + 1) % assigneeCycle.length];
+    const has = card.assigneeUserIds.includes(personId);
+    const next = has
+      ? card.assigneeUserIds.filter((x) => x !== personId)
+      : [...card.assigneeUserIds, personId];
     const prev = todos;
     setTodos((cur) =>
-      cur.map((t) => (t.id === id ? { ...t, assigneeUserId: next } : t)),
+      cur.map((t) => (t.id === id ? { ...t, assigneeUserIds: next } : t)),
     );
-    patch(id, { assigneeUserId: next ?? "" }).catch(() => {
+    patch(id, { assigneeUserIds: next }).catch(() => {
       setTodos(prev);
       setError("Couldn't change who it's for.");
     });
@@ -262,11 +259,8 @@ export default function TodoBoard({
                     todo={t}
                     colIndex={colIndex}
                     lastColIndex={TODO_COLUMNS.length - 1}
-                    assigneeName={
-                      t.assigneeUserId
-                        ? firstName.get(t.assigneeUserId) ?? null
-                        : null
-                    }
+                    people={people}
+                    firstName={firstName}
                     isPending={t.id.startsWith("tmp-")}
                     onDragStart={() => setDragId(t.id)}
                     onDragEnd={() => {
@@ -274,7 +268,7 @@ export default function TodoBoard({
                       setDragOver(null);
                     }}
                     onStep={step}
-                    onCycleAssignee={cycleAssignee}
+                    onToggleAssignee={toggleAssignee}
                     onEditTitle={editTitle}
                     onDelete={removeTodo}
                   />
@@ -300,24 +294,26 @@ function Card({
   todo,
   colIndex,
   lastColIndex,
-  assigneeName,
+  people,
+  firstName,
   isPending,
   onDragStart,
   onDragEnd,
   onStep,
-  onCycleAssignee,
+  onToggleAssignee,
   onEditTitle,
   onDelete,
 }: {
   todo: Todo;
   colIndex: number;
   lastColIndex: number;
-  assigneeName: string | null;
+  people: Person[];
+  firstName: Map<string, string>;
   isPending: boolean;
   onDragStart: () => void;
   onDragEnd: () => void;
   onStep: (id: string, dir: -1 | 1) => void;
-  onCycleAssignee: (id: string) => void;
+  onToggleAssignee: (id: string, personId: string) => void;
   onEditTitle: (id: string, title: string) => void;
   onDelete: (id: string) => void;
 }) {
@@ -370,18 +366,28 @@ function Card({
         </button>
       )}
 
-      <div className="mt-2 flex items-center gap-1">
-        <button
-          type="button"
-          onClick={() => onCycleAssignee(todo.id)}
-          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-            assigneeName
-              ? "bg-teal-600/10 text-teal-700 dark:text-teal-300"
-              : "text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
-          }`}
-        >
-          {assigneeName ?? "+ who?"}
-        </button>
+      <div className="mt-2 flex flex-wrap items-center gap-1">
+        {people.length === 0 && (
+          <span className="text-[11px] text-neutral-400">No people yet</span>
+        )}
+        {people.map((p) => {
+          const active = todo.assigneeUserIds.includes(p.id);
+          return (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => onToggleAssignee(todo.id, p.id)}
+              className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition ${
+                active
+                  ? "bg-teal-600 text-white"
+                  : "border border-black/10 text-neutral-500 hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10"
+              }`}
+              title={active ? `Unassign ${p.name}` : `Assign ${p.name}`}
+            >
+              {firstName.get(p.id) ?? p.name}
+            </button>
+          );
+        })}
 
         <div className="ml-auto flex items-center gap-0.5">
           <button
