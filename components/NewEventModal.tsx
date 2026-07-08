@@ -38,11 +38,18 @@ export default function NewEventModal({
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("10:00");
   const [notes, setNotes] = useState("");
+  const [kidIds, setKidIds] = useState<string[]>([]);
+  // "user:<id>" | "helper:<id>" | "family" | "" (nobody).
+  const [who, setWho] = useState<string>(`user:${currentUserId}`);
 
   // School-event fields.
   const [kidId, setKidId] = useState<string>("");
   const [schoolTime, setSchoolTime] = useState<string>("");
   const [assignee, setAssignee] = useState<string>(`user:${currentUserId}`); // "user:UUID" | "helper:UUID"
+
+  function toggleKid(id: string) {
+    setKidIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
+  }
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,6 +62,7 @@ export default function NewEventModal({
     assigneeUserId: string | null;
     helperId: string | null;
   } {
+    // "family" and "" both mean nobody in particular / whole household.
     if (v.startsWith("helper:")) return { assigneeUserId: null, helperId: v.slice(7) };
     if (v.startsWith("user:")) return { assigneeUserId: v.slice(5), helperId: null };
     return { assigneeUserId: null, helperId: null };
@@ -83,15 +91,21 @@ export default function NewEventModal({
     try {
       let res: Response;
       if (category === "general") {
-        res = await fetch("/api/events", {
+        const { assigneeUserId, helperId } = decodeAssignee(who);
+        // Route general events through week_events so they carry kids +
+        // assignee metadata (matching /plan) and show up in both places.
+        res = await fetch("/api/week-events", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             title: title.trim(),
-            date,
+            day: date,
             startTime: allDay ? null : startTime,
             endTime: allDay ? null : endTime,
             notes: notes.trim() || null,
+            kidIds,
+            assigneeUserId,
+            helperId,
           }),
         });
       } else {
@@ -184,9 +198,65 @@ export default function NewEventModal({
               />
             </label>
 
+            <div>
+              <span className="mb-1 block text-xs font-medium uppercase text-neutral-400">
+                For which kids
+              </span>
+              {kids.length === 0 ? (
+                <p className="text-[11px] text-neutral-400">
+                  Add kids on the People page first.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {kids.map((k) => (
+                    <CategoryChip
+                      key={k.id}
+                      label={k.name}
+                      active={kidIds.includes(k.id)}
+                      onClick={() => toggleKid(k.id)}
+                      amber
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
             <label className="block">
               <span className="mb-1 block text-xs font-medium uppercase text-neutral-400">
-                Date
+                Who's doing it
+              </span>
+              <select
+                value={who}
+                onChange={(e) => setWho(e.target.value)}
+                className="w-full rounded-lg border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+              >
+                <option value="">Nobody in particular</option>
+                <option value="family">🏠 All Family</option>
+                {people.length > 0 && (
+                  <optgroup label="People">
+                    {people.map((p) => (
+                      <option key={p.id} value={`user:${p.id}`}>
+                        {p.name}
+                        {p.id === currentUserId ? " (you)" : ""}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {helpers.length > 0 && (
+                  <optgroup label="Helpers">
+                    {helpers.map((h) => (
+                      <option key={h.id} value={`helper:${h.id}`}>
+                        {h.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium uppercase text-neutral-400">
+                Day
               </span>
               <input
                 type="date"
@@ -305,6 +375,7 @@ export default function NewEventModal({
                 className="w-full rounded-lg border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
               >
                 <option value="">by …</option>
+                <option value="family">🏠 All Family</option>
                 {people.length > 0 && (
                   <optgroup label="People">
                     {people.map((p) => (

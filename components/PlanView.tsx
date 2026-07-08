@@ -493,12 +493,19 @@ function EventEditor({
 
     setSaving(true);
     try {
+      // "family" is a UI shortcut meaning "no specific doer, the whole
+      // household". Store as null assignee + null helper — matches the
+      // "nobody in particular" state so the API is untouched.
+      const isHelper = who.startsWith("h:");
+      const isFamily = who === "family";
+      const assigneeUserId = isHelper || isFamily ? null : who || null;
+      const helperId = isHelper ? who.slice(2) : null;
+
       if (isSchool) {
         // School events live on school_events, not week_events. POST directly
         // and rely on router.refresh() to pull the new state — /plan won't
         // show the row (school events aren't part of the week planner), but
         // /school and the main calendar view will.
-        const isHelper = who.startsWith("h:");
         const res = await fetch("/api/school-events", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -507,8 +514,8 @@ function EventEditor({
             day: eventDay,
             kind: category === "school-drop" ? "drop" : "pickup",
             time: schoolTime,
-            assigneeUserId: isHelper ? null : who || null,
-            helperId: isHelper ? who.slice(2) : null,
+            assigneeUserId,
+            helperId,
             notes: notes.trim() || null,
           }),
         });
@@ -519,15 +526,14 @@ function EventEditor({
         router.refresh();
         onClose();
       } else {
-        const isHelper = who.startsWith("h:");
         await onSave({
           id: event?.id,
           day: eventDay,
           title: title.trim(),
           startTime: allDay ? null : startTime,
           endTime: allDay ? null : endTime || null,
-          assigneeUserId: isHelper ? null : who || null,
-          helperId: isHelper ? who.slice(2) : null,
+          assigneeUserId,
+          helperId,
           kidIds,
           notes: notes.trim() || null,
         });
@@ -708,6 +714,7 @@ function EventEditor({
               className="w-full rounded-lg border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
             >
               <option value="">Nobody in particular</option>
+              <option value="family">🏠 All Family</option>
               {people.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
