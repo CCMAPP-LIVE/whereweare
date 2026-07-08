@@ -208,6 +208,20 @@ export default function NewEventModal({
                 </p>
               ) : (
                 <div className="flex flex-wrap gap-1.5">
+                  {kids.length > 1 && (
+                    <CategoryChip
+                      label={kids.length === 2 ? "Both" : "All"}
+                      active={kids.every((k) => kidIds.includes(k.id))}
+                      onClick={() =>
+                        setKidIds(
+                          kids.every((k) => kidIds.includes(k.id))
+                            ? []
+                            : kids.map((k) => k.id),
+                        )
+                      }
+                      amber
+                    />
+                  )}
                   {kids.map((k) => (
                     <CategoryChip
                       key={k.id}

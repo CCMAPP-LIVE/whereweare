@@ -626,6 +626,26 @@ function EventEditor({
                   </p>
                 ) : (
                   <div className="flex flex-wrap gap-1.5">
+                    {kids.length > 1 &&
+                      (() => {
+                        const allActive = kids.every((k) => kidIds.includes(k.id));
+                        return (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setKidIds(allActive ? [] : kids.map((k) => k.id))
+                            }
+                            className={
+                              "rounded-full border px-2.5 py-1 text-xs transition " +
+                              (allActive
+                                ? "border-amber-500 bg-amber-200/70 text-amber-900 dark:bg-amber-500/30 dark:text-amber-100"
+                                : "border-black/15 text-neutral-500 hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10")
+                            }
+                          >
+                            {kids.length === 2 ? "Both" : "All"}
+                          </button>
+                        );
+                      })()}
                     {kids.map((k) => {
                       const active = kidIds.includes(k.id);
                       return (
