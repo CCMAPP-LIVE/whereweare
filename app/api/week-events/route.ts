@@ -24,8 +24,11 @@ export async function POST(request: Request) {
     typeof body.endTime === "string" && body.endTime !== "" ? body.endTime : null;
   const notes: string | null =
     typeof body.notes === "string" ? body.notes.trim().slice(0, NOTES_MAX) || null : null;
+  const helperId: string | null =
+    typeof body.helperId === "string" && body.helperId !== "" ? body.helperId : null;
+  // A run is done by either an app user OR a helper (e.g. Joy), never both.
   const assigneeUserId: string | null =
-    typeof body.assigneeUserId === "string" && body.assigneeUserId !== ""
+    !helperId && typeof body.assigneeUserId === "string" && body.assigneeUserId !== ""
       ? body.assigneeUserId
       : null;
   const kidIds: string[] = Array.isArray(body.kidIds)
@@ -52,6 +55,7 @@ export async function POST(request: Request) {
       title,
       notes,
       assignee_user_id: assigneeUserId,
+      helper_id: helperId,
       kid_ids: kidIds,
     })
     .select("id")
@@ -63,13 +67,16 @@ export async function POST(request: Request) {
   let lifeSynced = true;
   let warning: string | undefined;
   try {
-    const [assigneeRes, kidsRes] = await Promise.all([
+    const [assigneeRes, helperRes, kidsRes] = await Promise.all([
       assigneeUserId
         ? admin
             .from("profiles")
             .select("display_name")
             .eq("id", assigneeUserId)
             .maybeSingle()
+        : Promise.resolve({ data: null }),
+      helperId
+        ? admin.from("helpers").select("name").eq("id", helperId).maybeSingle()
         : Promise.resolve({ data: null }),
       kidIds.length > 0
         ? admin
@@ -79,7 +86,8 @@ export async function POST(request: Request) {
             .order("sort_order", { ascending: true })
         : Promise.resolve({ data: [] as { id: string; name: string }[] }),
     ]);
-    const assigneeName = assigneeRes.data?.display_name ?? null;
+    const assigneeName =
+      helperRes.data?.name ?? assigneeRes.data?.display_name ?? null;
     const kidNames = (kidsRes.data ?? []).map((k) => k.name);
     const googleEventId = await upsertWeekEventOnLifeCalendar({
       id: inserted.id,

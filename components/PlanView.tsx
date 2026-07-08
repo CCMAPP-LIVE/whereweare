@@ -14,6 +14,7 @@ export type WeekEvent = {
   title: string;
   notes: string | null;
   assigneeUserId: string | null;
+  helperId: string | null;
   kidIds: string[];
 };
 
@@ -30,6 +31,7 @@ type Props = {
   currentUserId: string;
   people: Person[];
   kids: Kid[];
+  helpers: Person[];
   days: string[];
   today: string;
   anchor: string;
@@ -44,6 +46,7 @@ export default function PlanView({
   currentUserId,
   people,
   kids,
+  helpers,
   days,
   today,
   anchor,
@@ -87,6 +90,11 @@ export default function PlanView({
       ids.map((id) => map.get(id)).filter((n): n is string => !!n);
   }, [kids]);
 
+  const helperNameOf = useMemo(() => {
+    const map = new Map(helpers.map((h) => [h.id, h.name] as const));
+    return (helperId: string | null) => (helperId ? map.get(helperId) ?? null : null);
+  }, [helpers]);
+
   const eventsByDay = useMemo(() => {
     const map = new Map<string, WeekEvent[]>();
     for (const ev of events) {
@@ -129,6 +137,7 @@ export default function PlanView({
     startTime: string | null;
     endTime: string | null;
     assigneeUserId: string | null;
+    helperId: string | null;
     kidIds: string[];
     notes: string | null;
   }) {
@@ -138,6 +147,7 @@ export default function PlanView({
       startTime: input.startTime,
       endTime: input.endTime,
       assigneeUserId: input.assigneeUserId,
+      helperId: input.helperId,
       kidIds: input.kidIds,
       notes: input.notes,
     });
@@ -157,6 +167,7 @@ export default function PlanView({
                 startTime: input.startTime,
                 endTime: input.endTime,
                 assigneeUserId: input.assigneeUserId,
+                helperId: input.helperId,
                 kidIds: input.kidIds,
                 notes: input.notes,
               }
@@ -181,6 +192,7 @@ export default function PlanView({
             startTime: input.startTime,
             endTime: input.endTime,
             assigneeUserId: input.assigneeUserId,
+            helperId: input.helperId,
             kidIds: input.kidIds,
             notes: input.notes,
           },
@@ -336,9 +348,12 @@ export default function PlanView({
                               {name}
                             </span>
                           ))}
-                          {ev.assigneeUserId && (
+                          {(ev.assigneeUserId || ev.helperId) && (
                             <span className="rounded-full bg-white/60 px-1.5 py-0.5 text-[10px] text-neutral-600 dark:bg-white/10 dark:text-neutral-300">
-                              by {nameOf(ev.assigneeUserId) ?? "Someone"}
+                              by{" "}
+                              {ev.helperId
+                                ? (helperNameOf(ev.helperId) ?? "Someone")
+                                : (nameOf(ev.assigneeUserId) ?? "Someone")}
                             </span>
                           )}
                         </div>
@@ -369,6 +384,7 @@ export default function PlanView({
           event={editing.event}
           people={people}
           kids={kids}
+          helpers={helpers}
           currentUserId={currentUserId}
           onClose={() => setEditing(null)}
           onSave={saveEvent}
@@ -394,6 +410,7 @@ function EventEditor({
   event,
   people,
   kids,
+  helpers,
   currentUserId,
   onClose,
   onSave,
@@ -403,6 +420,7 @@ function EventEditor({
   event: WeekEvent | null;
   people: Person[];
   kids: Kid[];
+  helpers: Person[];
   currentUserId: string;
   onClose: () => void;
   onSave: (input: {
@@ -412,6 +430,7 @@ function EventEditor({
     startTime: string | null;
     endTime: string | null;
     assigneeUserId: string | null;
+    helperId: string | null;
     kidIds: string[];
     notes: string | null;
   }) => Promise<void>;
@@ -422,8 +441,13 @@ function EventEditor({
   const [allDay, setAllDay] = useState(!event?.startTime);
   const [startTime, setStartTime] = useState(event?.startTime?.slice(0, 5) ?? "08:00");
   const [endTime, setEndTime] = useState(event?.endTime?.slice(0, 5) ?? "");
-  const [assigneeUserId, setAssigneeUserId] = useState<string>(
-    event?.assigneeUserId ?? currentUserId,
+  // A single "who's doing it" value: a user id, "h:<helperId>", or "" (nobody).
+  const [who, setWho] = useState<string>(
+    event
+      ? event.helperId
+        ? `h:${event.helperId}`
+        : (event.assigneeUserId ?? "")
+      : currentUserId,
   );
   const [kidIds, setKidIds] = useState<string[]>(event?.kidIds ?? []);
   const [notes, setNotes] = useState(event?.notes ?? "");
@@ -442,13 +466,15 @@ function EventEditor({
     setSaving(true);
     setError(null);
     try {
+      const isHelper = who.startsWith("h:");
       await onSave({
         id: event?.id,
         day: eventDay,
         title: title.trim(),
         startTime: allDay ? null : startTime,
         endTime: allDay ? null : endTime || null,
-        assigneeUserId: assigneeUserId || null,
+        assigneeUserId: isHelper ? null : who || null,
+        helperId: isHelper ? who.slice(2) : null,
         kidIds,
         notes: notes.trim() || null,
       });
@@ -528,8 +554,8 @@ function EventEditor({
               Who's doing it
             </span>
             <select
-              value={assigneeUserId ?? ""}
-              onChange={(e) => setAssigneeUserId(e.target.value)}
+              value={who}
+              onChange={(e) => setWho(e.target.value)}
               className="w-full rounded-lg border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
             >
               <option value="">Nobody in particular</option>
@@ -537,6 +563,11 @@ function EventEditor({
                 <option key={p.id} value={p.id}>
                   {p.name}
                   {p.id === currentUserId ? " (you)" : ""}
+                </option>
+              ))}
+              {helpers.map((h) => (
+                <option key={h.id} value={`h:${h.id}`}>
+                  {h.name}
                 </option>
               ))}
             </select>

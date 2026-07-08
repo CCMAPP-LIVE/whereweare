@@ -41,20 +41,25 @@ export default async function PlanPage({
   const firstDay = days[0];
   const lastDay = days[days.length - 1];
 
-  const [{ data: eventRows }, { data: kidRows }] = await Promise.all([
-    supabase
-      .from("week_events")
-      .select(
-        "id, user_id, day, start_time, end_time, title, notes, assignee_user_id, kid_ids, google_event_id, updated_at",
-      )
-      .gte("day", firstDay)
-      .lte("day", lastDay)
-      .order("start_time", { ascending: true, nullsFirst: true }),
-    supabase
-      .from("kids")
-      .select("id, name")
-      .order("sort_order", { ascending: true }),
-  ]);
+  const [{ data: eventRows }, { data: kidRows }, { data: helperRows }] =
+    await Promise.all([
+      supabase
+        .from("week_events")
+        .select(
+          "id, user_id, day, start_time, end_time, title, notes, assignee_user_id, helper_id, kid_ids, google_event_id, updated_at",
+        )
+        .gte("day", firstDay)
+        .lte("day", lastDay)
+        .order("start_time", { ascending: true, nullsFirst: true }),
+      supabase
+        .from("kids")
+        .select("id, name")
+        .order("sort_order", { ascending: true }),
+      supabase
+        .from("helpers")
+        .select("id, name")
+        .order("sort_order", { ascending: true }),
+    ]);
 
   const events: WeekEvent[] = (eventRows ?? []).map((r) => ({
     id: r.id,
@@ -65,10 +70,12 @@ export default async function PlanPage({
     title: r.title,
     notes: r.notes,
     assigneeUserId: r.assignee_user_id,
+    helperId: r.helper_id,
     kidIds: r.kid_ids ?? [],
   }));
 
   const kids = (kidRows ?? []).map((k) => ({ id: k.id, name: k.name }));
+  const helpers = (helperRows ?? []).map((h) => ({ id: h.id, name: h.name }));
 
   const { data: noteRow } = await supabase
     .from("week_notes")
@@ -111,6 +118,7 @@ export default async function PlanPage({
         currentUserId={user.id}
         people={people}
         kids={kids}
+        helpers={helpers}
         days={days}
         today={today}
         anchor={anchor}

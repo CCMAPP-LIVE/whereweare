@@ -30,8 +30,10 @@ export async function PUT(request: Request, { params }: Params) {
     typeof body.endTime === "string" && body.endTime !== "" ? body.endTime : null;
   const notes: string | null =
     typeof body.notes === "string" ? body.notes.trim().slice(0, NOTES_MAX) || null : null;
+  const helperId: string | null =
+    typeof body.helperId === "string" && body.helperId !== "" ? body.helperId : null;
   const assigneeUserId: string | null =
-    typeof body.assigneeUserId === "string" && body.assigneeUserId !== ""
+    !helperId && typeof body.assigneeUserId === "string" && body.assigneeUserId !== ""
       ? body.assigneeUserId
       : null;
   const kidIds: string[] = Array.isArray(body.kidIds)
@@ -66,6 +68,7 @@ export async function PUT(request: Request, { params }: Params) {
       title,
       notes,
       assignee_user_id: assigneeUserId,
+      helper_id: helperId,
       kid_ids: kidIds,
       updated_at: new Date().toISOString(),
     })
@@ -75,13 +78,16 @@ export async function PUT(request: Request, { params }: Params) {
   let lifeSynced = true;
   let warning: string | undefined;
   try {
-    const [assigneeRes, kidsRes] = await Promise.all([
+    const [assigneeRes, helperRes, kidsRes] = await Promise.all([
       assigneeUserId
         ? admin
             .from("profiles")
             .select("display_name")
             .eq("id", assigneeUserId)
             .maybeSingle()
+        : Promise.resolve({ data: null }),
+      helperId
+        ? admin.from("helpers").select("name").eq("id", helperId).maybeSingle()
         : Promise.resolve({ data: null }),
       kidIds.length > 0
         ? admin
@@ -91,7 +97,8 @@ export async function PUT(request: Request, { params }: Params) {
             .order("sort_order", { ascending: true })
         : Promise.resolve({ data: [] as { id: string; name: string }[] }),
     ]);
-    const assigneeName = assigneeRes.data?.display_name ?? null;
+    const assigneeName =
+      helperRes.data?.name ?? assigneeRes.data?.display_name ?? null;
     const kidNames = (kidsRes.data ?? []).map((k) => k.name);
     const newGoogleEventId = await upsertWeekEventOnLifeCalendar({
       id,
