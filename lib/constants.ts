@@ -46,3 +46,18 @@ export const SCHOOL_PICKUP_TIMES: { value: string; label: string }[] = [
   { value: "15:15", label: "3:15 pm" },
   { value: "16:00", label: "4:00 pm" },
 ];
+
+/**
+ * Columns for the shared to-do kanban (/todos). `value` is stored in
+ * `todos.status`; the order here is the left-to-right column order and also
+ * defines which way the ‹ › move buttons step.
+ */
+export type TodoStatus = "todo" | "doing" | "done";
+
+export const TODO_COLUMNS: { value: TodoStatus; label: string }[] = [
+  { value: "todo", label: "To do" },
+  { value: "doing", label: "In progress" },
+  { value: "done", label: "Done" },
+];
+
+export const TODO_STATUSES: TodoStatus[] = TODO_COLUMNS.map((c) => c.value);

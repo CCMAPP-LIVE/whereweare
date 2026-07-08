@@ -37,6 +37,12 @@ export default function NavBar() {
         >
           School
         </Link>
+        <Link
+          href="/todos"
+          className="whitespace-nowrap rounded-lg px-2.5 py-1.5 hover:bg-black/5 dark:hover:bg-white/10"
+        >
+          To-do
+        </Link>
         <CommentsNavBadge />
         <Link
           href="/users"
