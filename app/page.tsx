@@ -257,6 +257,8 @@ export default async function Home({
         key={`${view}:${anchor}`}
         currentUserId={user.id}
         people={people}
+        kids={(kidRows ?? []).map((k) => ({ id: k.id, name: k.name }))}
+        helpers={(helperRows ?? []).map((h) => ({ id: h.id, name: h.name }))}
         days={days}
         today={today}
         view={view}

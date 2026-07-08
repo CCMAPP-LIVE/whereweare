@@ -35,6 +35,8 @@ export type SchoolDay = { drop?: SchoolRun; pickup?: SchoolRun };
 type Props = {
   currentUserId: string;
   people: { id: string; name: string }[];
+  kids: { id: string; name: string }[];
+  helpers: { id: string; name: string }[];
   days: string[];
   today: string;
   view: CalView;
@@ -57,6 +59,8 @@ const VIEWS: { value: CalView; label: string }[] = [
 export default function CalendarView({
   currentUserId,
   people,
+  kids,
+  helpers,
   days,
   today,
   view,
@@ -260,6 +264,10 @@ export default function CalendarView({
       {addingEvent && (
         <NewEventModal
           defaultDate={view === "day" ? anchor : today >= days[0] && today <= days[days.length - 1] ? today : days[0]}
+          people={people}
+          kids={kids}
+          helpers={helpers}
+          currentUserId={currentUserId}
           onClose={() => setAddingEvent(false)}
           onCreated={() => router.refresh()}
         />
