@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { TODO_COLUMNS, type TodoStatus } from "@/lib/constants";
+import TodoComments from "@/components/TodoComments";
 
 export type Todo = {
   id: string;
@@ -9,6 +10,7 @@ export type Todo = {
   status: TodoStatus;
   position: number;
   assigneeUserIds: string[];
+  commentCount: number;
 };
 
 type Person = { id: string; name: string };
@@ -31,6 +33,7 @@ function bottomOf(todos: Todo[], status: TodoStatus): number {
 }
 
 export default function TodoBoard({
+  currentUserId,
   people,
   initialTodos,
 }: {
@@ -42,12 +45,23 @@ export default function TodoBoard({
   const [error, setError] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<TodoStatus | null>(null);
+  const [openComments, setOpenComments] = useState<string | null>(null);
 
   const firstName = useMemo(() => {
     const m = new Map<string, string>();
     for (const p of people) m.set(p.id, p.name.split(/\s+/)[0] || p.name);
     return m;
   }, [people]);
+
+  const fullName = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const p of people) m[p.id] = p.name;
+    return m;
+  }, [people]);
+
+  function updateCommentCount(id: string, count: number) {
+    setTodos((cur) => cur.map((t) => (t.id === id ? { ...t, commentCount: count } : t)));
+  }
 
 
   const byStatus = useMemo(() => {
@@ -70,6 +84,7 @@ export default function TodoBoard({
       status,
       position: bottomOf(todos, status),
       assigneeUserIds: [],
+      commentCount: 0,
     };
     setTodos((cur) => [...cur, optimistic]);
     try {
@@ -93,6 +108,7 @@ export default function TodoBoard({
                 status: json.todo.status,
                 position: json.todo.position,
                 assigneeUserIds: json.todo.assignee_user_ids ?? [],
+                commentCount: 0,
               }
             : t,
         ),
@@ -261,7 +277,14 @@ export default function TodoBoard({
                     lastColIndex={TODO_COLUMNS.length - 1}
                     people={people}
                     firstName={firstName}
+                    fullName={fullName}
+                    currentUserId={currentUserId}
                     isPending={t.id.startsWith("tmp-")}
+                    commentsOpen={openComments === t.id}
+                    onToggleComments={() =>
+                      setOpenComments((cur) => (cur === t.id ? null : t.id))
+                    }
+                    onCommentCountChange={(count) => updateCommentCount(t.id, count)}
                     onDragStart={() => setDragId(t.id)}
                     onDragEnd={() => {
                       setDragId(null);
@@ -296,7 +319,12 @@ function Card({
   lastColIndex,
   people,
   firstName,
+  fullName,
+  currentUserId,
   isPending,
+  commentsOpen,
+  onToggleComments,
+  onCommentCountChange,
   onDragStart,
   onDragEnd,
   onStep,
@@ -309,7 +337,12 @@ function Card({
   lastColIndex: number;
   people: Person[];
   firstName: Map<string, string>;
+  fullName: Record<string, string>;
+  currentUserId: string;
   isPending: boolean;
+  commentsOpen: boolean;
+  onToggleComments: () => void;
+  onCommentCountChange: (count: number) => void;
   onDragStart: () => void;
   onDragEnd: () => void;
   onStep: (id: string, dir: -1 | 1) => void;
@@ -392,6 +425,19 @@ function Card({
         <div className="ml-auto flex items-center gap-0.5">
           <button
             type="button"
+            onClick={onToggleComments}
+            className={`flex h-7 items-center gap-0.5 rounded-lg px-1.5 text-xs ${
+              commentsOpen
+                ? "bg-black/5 text-neutral-700 dark:bg-white/10 dark:text-neutral-200"
+                : "text-neutral-400 hover:bg-black/5 hover:text-neutral-600 dark:hover:bg-white/10"
+            }`}
+            aria-label="Toggle comments"
+            title="Comments"
+          >
+            💬{todo.commentCount > 0 ? ` ${todo.commentCount}` : ""}
+          </button>
+          <button
+            type="button"
             aria-label="Move left"
             disabled={colIndex === 0}
             onClick={() => onStep(todo.id, -1)}
@@ -418,6 +464,15 @@ function Card({
           </button>
         </div>
       </div>
+
+      {commentsOpen && !isPending && (
+        <TodoComments
+          todoId={todo.id}
+          currentUserId={currentUserId}
+          names={fullName}
+          onCountChange={onCommentCountChange}
+        />
+      )}
     </div>
   );
 }

@@ -583,6 +583,38 @@ export type Database = {
         }
         Relationships: []
       }
+      todo_comments: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          sender_id: string
+          todo_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          sender_id: string
+          todo_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          sender_id?: string
+          todo_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "todo_comments_todo_id_fkey"
+            columns: ["todo_id"]
+            isOneToOne: false
+            referencedRelation: "todos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       todos: {
         Row: {
           assignee_user_ids: string[]

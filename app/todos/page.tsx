@@ -27,12 +27,22 @@ export default async function TodosPage() {
     .order("position", { ascending: true })
     .order("created_at", { ascending: true });
 
+  // Comment counts for every card in one query, so each Card doesn't need its
+  // own round-trip just to know whether to show "💬" vs "💬 3".
+  const { data: commentRows } = await supabase
+    .from("todo_comments")
+    .select("todo_id");
+  const commentCounts: Record<string, number> = {};
+  for (const c of commentRows ?? [])
+    commentCounts[c.todo_id] = (commentCounts[c.todo_id] ?? 0) + 1;
+
   const todos: Todo[] = (rows ?? []).map((r) => ({
     id: r.id,
     title: r.title,
     status: r.status as Todo["status"],
     position: r.position,
     assigneeUserIds: r.assignee_user_ids ?? [],
+    commentCount: commentCounts[r.id] ?? 0,
   }));
 
   return (
