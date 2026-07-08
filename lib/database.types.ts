@@ -52,6 +52,42 @@ export type Database = {
           },
         ]
       }
+      birthdays: {
+        Row: {
+          created_at: string
+          day: number
+          id: string
+          month: number
+          name: string
+          notes: string | null
+          sort_order: number
+          updated_at: string
+          year: number | null
+        }
+        Insert: {
+          created_at?: string
+          day: number
+          id?: string
+          month: number
+          name: string
+          notes?: string | null
+          sort_order?: number
+          updated_at?: string
+          year?: number | null
+        }
+        Update: {
+          created_at?: string
+          day?: number
+          id?: string
+          month?: number
+          name?: string
+          notes?: string | null
+          sort_order?: number
+          updated_at?: string
+          year?: number | null
+        }
+        Relationships: []
+      }
       calendar_accounts: {
         Row: {
           account_email: string | null
