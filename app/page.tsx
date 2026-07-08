@@ -176,24 +176,35 @@ export default async function Home({
   }
 
   // In-app events created via the "+ Add event" button / the Plan page
-  // (week_events). Merged in so they show natively in the calendar without
-  // needing the Life calendar enabled for reading. Rendered under the creator.
+  // (week_events). Events tagged to a kid go under that kid's own row so each
+  // child's play dates / activities show separately from the parents; untagged
+  // events stay under their creator. Both already sync to the Life calendar.
+  const kidEvents: Record<string, Record<string, EventLite[]>> = {};
   const { data: weekEvents } = await supabase
     .from("week_events")
-    .select("id, user_id, day, start_time, title")
+    .select("id, user_id, day, start_time, title, kid_ids")
     .gte("day", firstDay)
     .lte("day", lastDay);
   for (const we of weekEvents ?? []) {
-    if (!events[we.user_id]) continue;
-    (events[we.user_id][we.day] ??= []).push({
+    const lite: EventLite = {
       id: `we:${we.id}`,
       title: we.title,
       time: we.start_time ? we.start_time.slice(0, 5) : "All day",
       color: "#0d9488",
       calendarLabel: "Added",
       provider: "google",
-    });
-    events[we.user_id][we.day].sort((a, b) => a.time.localeCompare(b.time));
+    };
+    const taggedKids: string[] = we.kid_ids ?? [];
+    if (taggedKids.length > 0) {
+      for (const kidId of taggedKids) {
+        (kidEvents[kidId] ??= {});
+        (kidEvents[kidId][we.day] ??= []).push({ ...lite, id: `${lite.id}:${kidId}` });
+        kidEvents[kidId][we.day].sort((a, b) => a.time.localeCompare(b.time));
+      }
+    } else if (events[we.user_id]) {
+      (events[we.user_id][we.day] ??= []).push(lite);
+      events[we.user_id][we.day].sort((a, b) => a.time.localeCompare(b.time));
+    }
   }
 
   // School drop-offs / pickups (school_events), summarised per day into a
@@ -266,6 +277,7 @@ export default async function Home({
         availability={availability}
         times={times}
         events={events}
+        kidEvents={kidEvents}
         calendarsConfigured={calendarsConfigured}
         unreadByDay={unreadByDay}
         commentedByDay={commentedByDay}
