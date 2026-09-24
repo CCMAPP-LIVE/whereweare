@@ -17,6 +17,27 @@ type Admin = SupabaseClient<Database>;
 /** How long we'll wait on a single calendar fetch before giving up on it. */
 const CALENDAR_FETCH_TIMEOUT_MS = 6000;
 
+/**
+ * Recently fetched events per calendar + range. Flicking between Calendar,
+ * Plan and back (or week to week and back) reuses these instead of calling
+ * Google / Microsoft again. New events on personal calendars show within this.
+ */
+const EVENTS_TTL_MS = 90_000;
+const eventCache = new Map<string, { at: number; events: NormalizedEvent[] }>();
+
+function cachedFetch(
+  key: string,
+  fetch: () => Promise<NormalizedEvent[]>,
+): Promise<NormalizedEvent[]> {
+  const hit = eventCache.get(key);
+  if (hit && Date.now() - hit.at < EVENTS_TTL_MS) return Promise.resolve(hit.events);
+  return fetch().then((events) => {
+    eventCache.set(key, { at: Date.now(), events });
+    if (eventCache.size > 500) eventCache.delete(eventCache.keys().next().value!);
+    return events;
+  });
+}
+
 /** Resolve `p`, or `fallback` if it rejects or takes longer than `ms`. */
 function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
   return new Promise((resolve) => {
@@ -58,10 +79,7 @@ export type AccountWithCalendars = {
 };
 
 /** Connected accounts for a user, joined with their refresh tokens (in JS). */
-async function accountsForUser(
-  admin: Admin,
-  userId: string,
-): Promise<AccountWithToken[]> {
+async function accountsForUser(admin: Admin, userId: string): Promise<AccountWithToken[]> {
   const { data: accounts } = await admin
     .from("calendar_accounts")
     .select("id, provider, account_email")
@@ -73,9 +91,7 @@ async function accountsForUser(
     .from("calendar_oauth_tokens")
     .select("calendar_account_id, refresh_token")
     .in("calendar_account_id", ids);
-  const tokenMap = new Map(
-    (tokens ?? []).map((t) => [t.calendar_account_id, t.refresh_token]),
-  );
+  const tokenMap = new Map((tokens ?? []).map((t) => [t.calendar_account_id, t.refresh_token]));
 
   return accounts.flatMap((a) => {
     const refresh_token = tokenMap.get(a.id);
@@ -122,18 +138,13 @@ export async function getEventsForUser(
     const account = byAccount.get(cal.calendar_account_id);
     if (!account) continue;
     const label = cal.label?.trim() || cal.summary || cal.external_id;
-    const fetchOne =
+    const fetchOne = cachedFetch(`${account.id}|${cal.external_id}|${timeMin}|${timeMax}`, () =>
       account.provider === "google"
-        ? listGoogleEvents(
-            account.refresh_token,
-            cal.external_id,
-            timeMin,
-            timeMax,
-            cal.color,
-          )
+        ? listGoogleEvents(account.refresh_token, cal.external_id, timeMin, timeMax, cal.color)
         : microsoftAccessToken(account.refresh_token).then((token) =>
             listMicrosoftEvents(token, cal.external_id, timeMin, timeMax, cal.color),
-          );
+          ),
+    );
     // A slow or hung provider must never block the page render, so cap the
     // wait per calendar and fall back to no events from that one.
     tasks.push(
@@ -151,10 +162,7 @@ export async function getEventsForUser(
  * the user's existing `enabled` choice and defaulting a newly-seen primary
  * calendar to enabled (secondary calendars start hidden until switched on).
  */
-export async function refreshCalendarsForUser(
-  admin: Admin,
-  userId: string,
-): Promise<void> {
+export async function refreshCalendarsForUser(admin: Admin, userId: string): Promise<void> {
   const accounts = await accountsForUser(admin, userId);
 
   for (const account of accounts) {
@@ -163,9 +171,7 @@ export async function refreshCalendarsForUser(
       discovered =
         account.provider === "google"
           ? await listGoogleCalendars(account.refresh_token)
-          : await listMicrosoftCalendars(
-              await microsoftAccessToken(account.refresh_token),
-            );
+          : await listMicrosoftCalendars(await microsoftAccessToken(account.refresh_token));
     } catch {
       continue;
     }
@@ -195,9 +201,7 @@ export async function refreshCalendarsForUser(
       .from("calendars")
       .select("external_id, enabled")
       .eq("calendar_account_id", account.id);
-    const existingMap = new Map(
-      (existing ?? []).map((c) => [c.external_id, c.enabled]),
-    );
+    const existingMap = new Map((existing ?? []).map((c) => [c.external_id, c.enabled]));
 
     const rows = discovered.map((c) => ({
       calendar_account_id: account.id,
@@ -205,15 +209,11 @@ export async function refreshCalendarsForUser(
       summary: c.summary,
       color: c.color,
       is_primary: c.isPrimary,
-      enabled: existingMap.has(c.externalId)
-        ? existingMap.get(c.externalId)!
-        : c.isPrimary,
+      enabled: existingMap.has(c.externalId) ? existingMap.get(c.externalId)! : c.isPrimary,
     }));
 
     if (rows.length > 0) {
-      await admin
-        .from("calendars")
-        .upsert(rows, { onConflict: "calendar_account_id,external_id" });
+      await admin.from("calendars").upsert(rows, { onConflict: "calendar_account_id,external_id" });
     }
   }
 }

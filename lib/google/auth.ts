@@ -6,12 +6,20 @@ import { requireEnv } from "@/lib/env";
  * token captured at sign-in. googleapis transparently exchanges it for a
  * short-lived access token on each call.
  */
+// One client per refresh token, kept for the life of the server instance: the
+// client caches its access token, so repeat page loads skip the token exchange.
+const userClients = new Map<string, InstanceType<typeof google.auth.OAuth2>>();
+
 export function googleUserAuth(refreshToken: string) {
-  const client = new google.auth.OAuth2(
-    requireEnv("GOOGLE_CLIENT_ID"),
-    requireEnv("GOOGLE_CLIENT_SECRET"),
-  );
-  client.setCredentials({ refresh_token: refreshToken });
+  let client = userClients.get(refreshToken);
+  if (!client) {
+    client = new google.auth.OAuth2(
+      requireEnv("GOOGLE_CLIENT_ID"),
+      requireEnv("GOOGLE_CLIENT_SECRET"),
+    );
+    client.setCredentials({ refresh_token: refreshToken });
+    userClients.set(refreshToken, client);
+  }
   return client;
 }
 
@@ -28,9 +36,7 @@ export function googleUserAuth(refreshToken: string) {
  */
 export function googleServiceAccountAuth() {
   const json = JSON.parse(
-    Buffer.from(requireEnv("GOOGLE_SERVICE_ACCOUNT_KEY"), "base64").toString(
-      "utf8",
-    ),
+    Buffer.from(requireEnv("GOOGLE_SERVICE_ACCOUNT_KEY"), "base64").toString("utf8"),
   ) as { client_email: string; private_key: string };
 
   return new google.auth.JWT({

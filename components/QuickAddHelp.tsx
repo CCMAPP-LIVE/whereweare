@@ -100,7 +100,7 @@ const SECTIONS: {
       "📋 Paste a school email or message; it picks the sentence with a date.",
       "Recent phrases appear as one-tap chips.",
       "On Android, Share → Where We Are opens this pre-filled.",
-      "Same rules in Slack (#where-we-are): reply in the thread to change, or tap Edit / Undo.",
+      "On the Calendar page, tap an event you added to delete it or edit it in Plan.",
     ],
   },
 ];

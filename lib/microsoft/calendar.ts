@@ -8,27 +8,40 @@ const GRAPH = "https://graph.microsoft.com/v1.0";
  * Exchange a stored Microsoft refresh token for a fresh access token.
  * Uses the OAuth2 token endpoint directly (no extra SDK needed).
  */
+const msTokens = new Map<string, { token: string; expires: number }>();
+
+/** Access token for a refresh token, reused until a minute before it expires. */
 export async function microsoftAccessToken(refreshToken: string): Promise<string> {
+  const cached = msTokens.get(refreshToken);
+  if (cached && cached.expires > Date.now()) return cached.token;
+  const token = await fetchMicrosoftAccessToken(refreshToken);
+  msTokens.set(refreshToken, {
+    token: token.access_token,
+    expires: Date.now() + (token.expires_in - 60) * 1000,
+  });
+  return token.access_token;
+}
+
+async function fetchMicrosoftAccessToken(
+  refreshToken: string,
+): Promise<{ access_token: string; expires_in: number }> {
   const tenant = process.env.MICROSOFT_TENANT_ID || "organizations";
-  const res = await fetch(
-    `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: requireEnv("MICROSOFT_CLIENT_ID"),
-        client_secret: requireEnv("MICROSOFT_CLIENT_SECRET"),
-        grant_type: "refresh_token",
-        refresh_token: refreshToken,
-        scope: "openid email offline_access Calendars.Read",
-      }),
-    },
-  );
+  const res = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: requireEnv("MICROSOFT_CLIENT_ID"),
+      client_secret: requireEnv("MICROSOFT_CLIENT_SECRET"),
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+      scope: "openid email offline_access Calendars.Read",
+    }),
+  });
   if (!res.ok) {
     throw new Error(`Microsoft token refresh failed: ${res.status} ${await res.text()}`);
   }
-  const json = (await res.json()) as { access_token: string };
-  return json.access_token;
+  const json = (await res.json()) as { access_token: string; expires_in?: number };
+  return { access_token: json.access_token, expires_in: json.expires_in ?? 3600 };
 }
 
 async function graphGet<T>(accessToken: string, url: string): Promise<T> {
@@ -44,9 +57,7 @@ async function graphGet<T>(accessToken: string, url: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-export async function listMicrosoftCalendars(
-  accessToken: string,
-): Promise<DiscoveredCalendar[]> {
+export async function listMicrosoftCalendars(accessToken: string): Promise<DiscoveredCalendar[]> {
   type GraphCal = {
     id: string;
     name: string;

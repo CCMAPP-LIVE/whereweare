@@ -74,12 +74,71 @@ export default async function Home({
     name: p.display_name?.trim() || "Someone",
   }));
 
-  // Availability for the visible range.
-  const { data: avail } = await supabase
-    .from("availability")
-    .select("user_id, day, slot, status, note")
-    .gte("day", firstDay)
-    .lte("day", lastDay);
+  // Everything the page needs is independent, so fetch it all at once
+  // (including other people's Google / Outlook calendars) instead of one
+  // round-trip after another.
+  const [
+    { data: avail },
+    { data: dtimes },
+    { data: unreadRows },
+    { data: commentRows },
+    { data: weekEvents },
+    { data: schoolEvents },
+    { data: kidRows },
+    { data: helperRows },
+    external,
+  ] = await Promise.all([
+    supabase
+      .from("availability")
+      .select("user_id, day, slot, status, note")
+      .gte("day", firstDay)
+      .lte("day", lastDay),
+    supabase
+      .from("day_times")
+      .select("user_id, day, leave_time, return_time")
+      .gte("day", firstDay)
+      .lte("day", lastDay),
+    supabase
+      .from("messages")
+      .select("day")
+      .eq("recipient_id", user.id)
+      .is("read_at", null)
+      .gte("day", firstDay)
+      .lte("day", lastDay),
+    supabase
+      .from("messages")
+      .select("day")
+      .not("day", "is", null)
+      .gte("day", firstDay)
+      .lte("day", lastDay)
+      .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`),
+    supabase
+      .from("week_events")
+      .select("id, user_id, day, start_time, title, kid_ids, assignee_user_id, helper_id")
+      .gte("day", firstDay)
+      .lte("day", lastDay),
+    supabase
+      .from("school_events")
+      .select("day, time, kind, kid_id, assignee_user_id, helper_id")
+      .gte("day", firstDay)
+      .lte("day", lastDay),
+    supabase.from("kids").select("id, name, sort_order").order("sort_order"),
+    supabase.from("helpers").select("id, name"),
+    // Calendar events (best-effort: needs service-role + provider setup).
+    (async () => {
+      try {
+        const admin = createAdminClient();
+        const perPerson = await Promise.all(
+          people.map((p) =>
+            getEventsForUser(admin, p.id, timeMin, timeMax).catch(() => [] as NormalizedEvent[]),
+          ),
+        );
+        return { configured: true, perPerson };
+      } catch {
+        return { configured: false, perPerson: people.map(() => [] as NormalizedEvent[]) };
+      }
+    })(),
+  ]);
 
   const availability: Record<
     string,
@@ -95,11 +154,6 @@ export default async function Home({
   }
 
   // Out/back times for the visible range.
-  const { data: dtimes } = await supabase
-    .from("day_times")
-    .select("user_id, day, leave_time, return_time")
-    .gte("day", firstDay)
-    .lte("day", lastDay);
 
   const times: Record<
     string,
@@ -114,66 +168,37 @@ export default async function Home({
   }
 
   // Unread comment counts per day, for badges on this user's visible range.
-  const { data: unreadRows } = await supabase
-    .from("messages")
-    .select("day")
-    .eq("recipient_id", user.id)
-    .is("read_at", null)
-    .gte("day", firstDay)
-    .lte("day", lastDay);
   const unreadByDay: Record<string, number> = {};
   for (const row of unreadRows ?? []) unreadByDay[row.day] = (unreadByDay[row.day] ?? 0) + 1;
 
   // Total comment counts per day (read or unread) so every day with any
   // discussion shows a badge, not just days with something unread.
-  const { data: commentRows } = await supabase
-    .from("messages")
-    .select("day")
-    .not("day", "is", null)
-    .gte("day", firstDay)
-    .lte("day", lastDay)
-    .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`);
   const commentedByDay: Record<string, number> = {};
   for (const row of commentRows ?? [])
     if (row.day) commentedByDay[row.day] = (commentedByDay[row.day] ?? 0) + 1;
 
-  // Calendar events (best-effort: needs service-role + provider setup).
+  // Other calendars (Google / Outlook), bucketed by day.
   const events: Record<string, Record<string, EventLite[]>> = {};
   for (const p of people) events[p.id] = {};
-  let calendarsConfigured = true;
-  try {
-    const admin = createAdminClient();
-    // Fetch every person's calendars in parallel so a view change waits on the
-    // slowest single person, not the sum of everyone.
-    await Promise.all(
-      people.map(async (p) => {
-        let evs: NormalizedEvent[] = [];
-        try {
-          evs = await getEventsForUser(admin, p.id, timeMin, timeMax);
-        } catch {
-          evs = [];
-        }
-        for (const ev of evs) {
-          for (const day of daysOf(ev)) {
-            if (day < firstDay || day > lastDay) continue;
-            (events[p.id][day] ??= []).push({
-              id: `${ev.id}:${day}`,
-              title: ev.title,
-              time: timeOf(ev),
-              color: ev.color,
-              calendarLabel: ev.calendarLabel,
-              provider: ev.provider,
-            });
-          }
-        }
-        for (const day of Object.keys(events[p.id])) {
-          events[p.id][day].sort((a, b) => a.time.localeCompare(b.time));
-        }
-      }),
-    );
-  } catch {
-    calendarsConfigured = false; // SUPABASE_SERVICE_ROLE_KEY not set yet
-  }
+  const calendarsConfigured = external.configured;
+  people.forEach((p, i) => {
+    for (const ev of external.perPerson[i]) {
+      for (const day of daysOf(ev)) {
+        if (day < firstDay || day > lastDay) continue;
+        (events[p.id][day] ??= []).push({
+          id: `${ev.id}:${day}`,
+          title: ev.title,
+          time: timeOf(ev),
+          color: ev.color,
+          calendarLabel: ev.calendarLabel,
+          provider: ev.provider,
+        });
+      }
+    }
+    for (const day of Object.keys(events[p.id])) {
+      events[p.id][day].sort((a, b) => a.time.localeCompare(b.time));
+    }
+  });
 
   // In-app events created via the "+ Add event" button / Quick add / the Plan
   // page (week_events). Events tagged to a kid go under that kid's own row.
@@ -182,11 +207,6 @@ export default async function Home({
   // for the kids (e.g. Joy picking up) stay on the kids' rows. All sync to the
   // Life calendar.
   const kidEvents: Record<string, Record<string, EventLite[]>> = {};
-  const { data: weekEvents } = await supabase
-    .from("week_events")
-    .select("id, user_id, day, start_time, title, kid_ids, assignee_user_id, helper_id")
-    .gte("day", firstDay)
-    .lte("day", lastDay);
   const addTo = (
     map: Record<string, Record<string, EventLite[]>>,
     who: string,
@@ -225,16 +245,6 @@ export default async function Home({
   // prominent "who's doing it" band: one line for the drop-off, one for the
   // pickup, with the person/helper name shown boldly. Kids are only broken out
   // when Bernie and Percy have different people for the same run.
-  const [{ data: schoolEvents }, { data: kidRows }, { data: helperRows }] =
-    await Promise.all([
-      supabase
-        .from("school_events")
-        .select("day, time, kind, kid_id, assignee_user_id, helper_id")
-        .gte("day", firstDay)
-        .lte("day", lastDay),
-      supabase.from("kids").select("id, name, sort_order").order("sort_order"),
-      supabase.from("helpers").select("id, name"),
-    ]);
   const helperName = new Map((helperRows ?? []).map((h) => [h.id, h.name]));
   const profileName = new Map(people.map((p) => [p.id, p.name]));
   const kidName = new Map((kidRows ?? []).map((k) => [k.id, k.name]));

@@ -7,6 +7,7 @@ import { APP_NAME } from "@/lib/constants";
 import CommentsNavBadge from "@/components/CommentsNavBadge";
 import TodoNavBadge from "@/components/TodoNavBadge";
 import QuickAddChat from "@/components/QuickAddChat";
+import RefreshOnReturn from "@/components/RefreshOnReturn";
 
 const LINKS = [
   { href: "/", label: "Calendar" },
@@ -115,6 +116,7 @@ export default function NavBar() {
     </header>
     {/* Outside the header: its backdrop-blur would trap position:fixed children. */}
     <QuickAddChat />
+    <RefreshOnReturn />
     </>
   );
 }
