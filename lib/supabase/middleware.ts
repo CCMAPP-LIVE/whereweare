@@ -11,6 +11,7 @@ const PUBLIC_PREFIXES = [
   "/api/join",
   "/auth",
   "/api/cron",
+  "/api/slack", // Slack webhooks — verified by signing secret instead
   "/manifest.webmanifest",
   "/sw.js",
   "/icon",

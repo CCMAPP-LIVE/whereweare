@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import {
-  deleteWeekEventOnLifeCalendar,
-  upsertWeekEventOnLifeCalendar,
-} from "@/lib/google/weekEvents";
+import { deleteWeekEvent, updateWeekEvent } from "@/lib/weekEvents";
 
 const TITLE_MAX = 200;
 const NOTES_MAX = 2000;
@@ -59,70 +56,17 @@ export async function PUT(request: Request, { params }: Params) {
   if (existing.user_id !== user.id)
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
-  const { error: updateErr } = await admin
-    .from("week_events")
-    .update({
-      day,
-      start_time: startTime,
-      end_time: endTime,
-      title,
-      notes,
-      assignee_user_id: assigneeUserId,
-      helper_id: helperId,
-      kid_ids: kidIds,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", id);
-  if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 });
-
-  let lifeSynced = true;
-  let warning: string | undefined;
   try {
-    const [assigneeRes, helperRes, kidsRes] = await Promise.all([
-      assigneeUserId
-        ? admin
-            .from("profiles")
-            .select("display_name")
-            .eq("id", assigneeUserId)
-            .maybeSingle()
-        : Promise.resolve({ data: null }),
-      helperId
-        ? admin.from("helpers").select("name").eq("id", helperId).maybeSingle()
-        : Promise.resolve({ data: null }),
-      kidIds.length > 0
-        ? admin
-            .from("kids")
-            .select("id, name, sort_order")
-            .in("id", kidIds)
-            .order("sort_order", { ascending: true })
-        : Promise.resolve({ data: [] as { id: string; name: string }[] }),
-    ]);
-    const assigneeName =
-      helperRes.data?.name ?? assigneeRes.data?.display_name ?? null;
-    const kidNames = (kidsRes.data ?? []).map((k) => k.name);
-    const newGoogleEventId = await upsertWeekEventOnLifeCalendar({
+    const result = await updateWeekEvent(
+      admin,
       id,
-      day,
-      startTime,
-      endTime,
-      title,
-      notes,
-      kidNames,
-      assigneeName,
-      googleEventId: existing.google_event_id,
-    });
-    if (newGoogleEventId && newGoogleEventId !== existing.google_event_id) {
-      await admin
-        .from("week_events")
-        .update({ google_event_id: newGoogleEventId })
-        .eq("id", id);
-    }
+      { day, startTime, endTime, title, notes, assigneeUserId, helperId, kidIds },
+      existing.google_event_id,
+    );
+    return NextResponse.json({ ok: true, ...result });
   } catch (e) {
-    lifeSynced = false;
-    warning = (e as Error).message;
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
-
-  return NextResponse.json({ ok: true, lifeSynced, warning });
 }
 
 export async function DELETE(_request: Request, { params }: Params) {
@@ -144,16 +88,11 @@ export async function DELETE(_request: Request, { params }: Params) {
   if (existing.user_id !== user.id)
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
-  if (existing.google_event_id) {
-    try {
-      await deleteWeekEventOnLifeCalendar(existing.google_event_id);
-    } catch {
-      // Non-fatal — row is what the app treats as source of truth.
-    }
+  try {
+    await deleteWeekEvent(admin, id, existing.google_event_id);
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
-
-  const { error: delErr } = await admin.from("week_events").delete().eq("id", id);
-  if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
 
   return NextResponse.json({ ok: true });
 }

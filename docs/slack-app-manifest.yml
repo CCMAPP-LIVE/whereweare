@@ -1,0 +1,36 @@
+# Paste into https://api.slack.com/apps → Create New App → From a manifest
+# (pick the DMSCO workspace). Then Install to Workspace.
+display_information:
+  name: Where We Are
+  description: Add events to the Where We Are planner by chatting.
+  background_color: "#1e293b"
+features:
+  bot_user:
+    display_name: Where We Are
+    always_online: true
+  app_home:
+    home_tab_enabled: false
+    messages_tab_enabled: true
+    messages_tab_read_only_enabled: false
+oauth_config:
+  scopes:
+    bot:
+      - chat:write
+      - channels:history
+      - groups:history
+      - im:history
+      - users:read
+      - users:read.email
+settings:
+  event_subscriptions:
+    request_url: https://whereweare.vercel.app/api/slack/events
+    bot_events:
+      - message.channels
+      - message.groups
+      - message.im
+  interactivity:
+    is_enabled: true
+    request_url: https://whereweare.vercel.app/api/slack/interact
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false

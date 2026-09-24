@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { upsertWeekEventOnLifeCalendar } from "@/lib/google/weekEvents";
+import { createWeekEvent } from "@/lib/weekEvents";
 
 const TITLE_MAX = 200;
 const NOTES_MAX = 2000;
@@ -44,72 +44,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "invalid endTime" }, { status: 400 });
 
   const admin = createAdminClient();
-
-  const { data: inserted, error: insertErr } = await admin
-    .from("week_events")
-    .insert({
-      user_id: user.id,
-      day,
-      start_time: startTime,
-      end_time: endTime,
-      title,
-      notes,
-      assignee_user_id: assigneeUserId,
-      helper_id: helperId,
-      kid_ids: kidIds,
-    })
-    .select("id")
-    .single();
-  if (insertErr || !inserted)
-    return NextResponse.json({ error: insertErr?.message ?? "insert failed" }, { status: 500 });
-
-  // Best-effort Life Calendar sync.
-  let lifeSynced = true;
-  let warning: string | undefined;
   try {
-    const [assigneeRes, helperRes, kidsRes] = await Promise.all([
-      assigneeUserId
-        ? admin
-            .from("profiles")
-            .select("display_name")
-            .eq("id", assigneeUserId)
-            .maybeSingle()
-        : Promise.resolve({ data: null }),
-      helperId
-        ? admin.from("helpers").select("name").eq("id", helperId).maybeSingle()
-        : Promise.resolve({ data: null }),
-      kidIds.length > 0
-        ? admin
-            .from("kids")
-            .select("id, name, sort_order")
-            .in("id", kidIds)
-            .order("sort_order", { ascending: true })
-        : Promise.resolve({ data: [] as { id: string; name: string }[] }),
-    ]);
-    const assigneeName =
-      helperRes.data?.name ?? assigneeRes.data?.display_name ?? null;
-    const kidNames = (kidsRes.data ?? []).map((k) => k.name);
-    const googleEventId = await upsertWeekEventOnLifeCalendar({
-      id: inserted.id,
+    const result = await createWeekEvent(admin, user.id, {
       day,
       startTime,
       endTime,
       title,
       notes,
-      kidNames,
-      assigneeName,
-      googleEventId: null,
+      assigneeUserId,
+      helperId,
+      kidIds,
     });
-    if (googleEventId) {
-      await admin
-        .from("week_events")
-        .update({ google_event_id: googleEventId })
-        .eq("id", inserted.id);
-    }
+    return NextResponse.json({ ok: true, ...result });
   } catch (e) {
-    lifeSynced = false;
-    warning = (e as Error).message;
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
-
-  return NextResponse.json({ ok: true, id: inserted.id, lifeSynced, warning });
 }
