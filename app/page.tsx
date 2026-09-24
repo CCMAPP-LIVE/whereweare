@@ -175,16 +175,28 @@ export default async function Home({
     calendarsConfigured = false; // SUPABASE_SERVICE_ROLE_KEY not set yet
   }
 
-  // In-app events created via the "+ Add event" button / the Plan page
-  // (week_events). Events tagged to a kid go under that kid's own row so each
-  // child's play dates / activities show separately from the parents; untagged
-  // events stay under their creator. Both already sync to the Life calendar.
+  // In-app events created via the "+ Add event" button / Quick add / the Plan
+  // page (week_events). Events tagged to a kid go under that kid's own row.
+  // Adults: an event assigned to someone shows under them; a shared / family
+  // event (nobody assigned, no helper) shows under both adults. Helper runs
+  // for the kids (e.g. Joy picking up) stay on the kids' rows. All sync to the
+  // Life calendar.
   const kidEvents: Record<string, Record<string, EventLite[]>> = {};
   const { data: weekEvents } = await supabase
     .from("week_events")
-    .select("id, user_id, day, start_time, title, kid_ids")
+    .select("id, user_id, day, start_time, title, kid_ids, assignee_user_id, helper_id")
     .gte("day", firstDay)
     .lte("day", lastDay);
+  const addTo = (
+    map: Record<string, Record<string, EventLite[]>>,
+    who: string,
+    day: string,
+    ev: EventLite,
+  ) => {
+    (map[who] ??= {});
+    (map[who][day] ??= []).push(ev);
+    map[who][day].sort((a, b) => a.time.localeCompare(b.time));
+  };
   for (const we of weekEvents ?? []) {
     const lite: EventLite = {
       id: `we:${we.id}`,
@@ -195,15 +207,17 @@ export default async function Home({
       provider: "google",
     };
     const taggedKids: string[] = we.kid_ids ?? [];
-    if (taggedKids.length > 0) {
-      for (const kidId of taggedKids) {
-        (kidEvents[kidId] ??= {});
-        (kidEvents[kidId][we.day] ??= []).push({ ...lite, id: `${lite.id}:${kidId}` });
-        kidEvents[kidId][we.day].sort((a, b) => a.time.localeCompare(b.time));
-      }
-    } else if (events[we.user_id]) {
-      (events[we.user_id][we.day] ??= []).push(lite);
-      events[we.user_id][we.day].sort((a, b) => a.time.localeCompare(b.time));
+    for (const kidId of taggedKids) addTo(kidEvents, kidId, we.day, { ...lite, id: `${lite.id}:${kidId}` });
+
+    const adults: string[] = we.assignee_user_id
+      ? [we.assignee_user_id]
+      : we.helper_id
+        ? taggedKids.length > 0
+          ? [] // e.g. Joy's pickup: kids' rows only
+          : [we.user_id]
+        : people.map((p) => p.id); // shared / family: both adults
+    for (const adultId of adults) {
+      if (events[adultId]) addTo(events, adultId, we.day, { ...lite, id: `${lite.id}:u:${adultId}` });
     }
   }
 
