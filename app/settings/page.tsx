@@ -7,6 +7,7 @@ import ProfileForm from "@/components/ProfileForm";
 import ConnectAccounts from "@/components/ConnectAccounts";
 import CalendarLabelEditor from "@/components/CalendarLabelEditor";
 import EnablePush from "@/components/EnablePush";
+import LifeResyncButton from "@/components/LifeResyncButton";
 
 export const dynamic = "force-dynamic";
 
@@ -110,6 +111,13 @@ export default async function SettingsPage() {
           ) : (
             <CalendarLabelEditor accounts={accounts} />
           )}
+        </Section>
+
+        <Section
+          title="Life calendar"
+          description="Send everything in the app (events, school runs and where you both are) to the shared Life calendar again. Adds anything missing, updates the rest and removes duplicates. Safe to press any time."
+        >
+          <LifeResyncButton />
         </Section>
 
         <Section

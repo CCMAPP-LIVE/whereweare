@@ -231,6 +231,16 @@ export default function QuickAddChat() {
 
   async function submit() {
     if (!ready || !current || !current.ok) return;
+    // Always double-check before anything is deleted.
+    if (
+      current.kind === "change" &&
+      current.action === "cancel" &&
+      !confirm(
+        `Delete “${current.title}”${current.count > 1 ? ` (${current.count} entries)` : ""}? ` +
+          "It will also be removed from the Life calendar.",
+      )
+    )
+      return;
     setMessages((m) => [...m, { role: "user", text }]);
     if (current.kind === "answer") {
       setMessages((m) => [

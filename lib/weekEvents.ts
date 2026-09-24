@@ -126,3 +126,13 @@ export async function deleteWeekEvent(admin: Admin, id: string, googleEventId: s
   const { error } = await admin.from("week_events").delete().eq("id", id);
   if (error) throw new Error(error.message);
 }
+
+/** Re-send an existing week_event to the Life Calendar (backfill / repair). */
+export async function resyncWeekEvent(
+  admin: Admin,
+  id: string,
+  ev: WeekEventInput,
+  googleEventId: string | null,
+) {
+  return syncToLife(admin, id, ev, googleEventId);
+}

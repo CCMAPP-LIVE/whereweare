@@ -73,10 +73,13 @@ const SECTIONS: {
       ["make swimming 5pm", "New time"],
       ["change swimming to Ashley", "New person"],
       ["rename swimming to Swim club", "New name"],
-      ["cancel Legoland · cancel swimming on 6 Oct", "Removes it (one day, or all upcoming)"],
+      [
+        "delete Legoland · cancel swimming on 6 Oct",
+        "Deletes it (one day, or all upcoming) — asks you to confirm first",
+      ],
     ],
     bullets: [
-      "Shows before → after; press Change or Remove. Undo puts it back.",
+      "Shows before → after; press Change or Remove. Deleting always asks “Are you sure?” first, and Undo puts it back.",
       "“Friday” means the Friday in that event's own week. Only the person who added it can change it.",
     ],
   },
