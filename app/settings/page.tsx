@@ -8,6 +8,7 @@ import ConnectAccounts from "@/components/ConnectAccounts";
 import CalendarLabelEditor from "@/components/CalendarLabelEditor";
 import EnablePush from "@/components/EnablePush";
 import LifeResyncButton from "@/components/LifeResyncButton";
+import TermDatesImport from "@/components/TermDatesImport";
 
 export const dynamic = "force-dynamic";
 
@@ -111,6 +112,13 @@ export default async function SettingsPage() {
           ) : (
             <CalendarLabelEditor accounts={accounts} />
           )}
+        </Section>
+
+        <Section
+          title="School term dates"
+          description="Paste the school's calendar link (often under “Subscribe” or “iCal” on the school website) to add holidays and INSET days as “🏫 …” all-day entries for the kids. Run again any time to pick up new dates."
+        >
+          <TermDatesImport />
         </Section>
 
         <Section

@@ -24,6 +24,10 @@ const SECTIONS: {
       ["Legoland all day Sat for the family", "All day · Bernie & Percy · David & Ashley"],
       ["Beavers camp Sat 6pm to Sun 9am", "Sat 18:00 → Sun 09:00 (one entry per day)"],
       ["Bernie football every Saturday 10am", "Weekly for 8 weeks"],
+      [
+        "Remind Percy PE kit every Tuesday",
+        "🔔 PE kit on Tuesdays (all day) — in the 7pm summary the night before",
+      ],
     ],
   },
   {
@@ -101,6 +105,9 @@ const SECTIONS: {
       "Recent phrases appear as one-tap chips.",
       "On Android, Share → Where We Are opens this pre-filled.",
       "On the Calendar page, tap an event you added to delete it or edit it in Plan.",
+      "7pm every evening: a notification with tomorrow's runs, plans, 🔔 reminders and anything that needs sorting. Sundays: the week-ahead sheet.",
+      "⚠️ Heads up at the top of the Calendar flags nobody on a school run, or someone away but down for something.",
+      "🖨 Print (menu): print the week, save a PDF, send it as a WhatsApp message, or share a live read-only link with Joy or grandparents.",
     ],
   },
 ];

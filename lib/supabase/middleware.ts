@@ -12,6 +12,7 @@ const PUBLIC_PREFIXES = [
   "/auth",
   "/api/cron",
   "/api/slack", // Slack webhooks — verified by signing secret instead
+  "/week/", // read-only shared week sheets — signed token instead of login
   "/manifest.webmanifest",
   "/sw.js",
   "/icon",

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 type Person = { id: string; name: string };
@@ -20,6 +21,7 @@ export default function PrintControls({
   include,
   people,
   kids,
+  shareText,
 }: {
   week: string;
   thisWeek: string;
@@ -28,8 +30,43 @@ export default function PrintControls({
   include: string[];
   people: Person[];
   kids: Person[];
+  shareText: string;
 }) {
   const router = useRouter();
+  const [note, setNote] = useState<string | null>(null);
+
+  /** Phone share sheet (WhatsApp, Messages…); falls back to WhatsApp web. */
+  async function share(data: { title: string; text: string; url?: string }) {
+    if (navigator.share) {
+      try {
+        await navigator.share(data);
+        return;
+      } catch (e) {
+        if ((e as Error).name === "AbortError") return; // closed the sheet
+      }
+    }
+    const msg = data.url ? `${data.text}\n${data.url}` : data.text;
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+  }
+
+  async function shareLink() {
+    setNote(null);
+    const res = await fetch("/api/share-link", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ who, include }),
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!j.url) return setNote("Couldn't make a link — try again.");
+    await share({
+      title: "Week ahead",
+      text: "Our week ahead (always up to date):",
+      url: j.url,
+    });
+    setNote(
+      "Link shared. It shows this week and next, always up to date, for 6 months — no login needed. Work calendars are never included.",
+    );
+  }
 
   function go(next: { week?: string; who?: string; include?: string[] }) {
     const q = new URLSearchParams({
@@ -64,6 +101,21 @@ export default function PrintControls({
           🖨 Print / Save PDF
         </button>
       </div>
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={() => share({ title: "Week ahead", text: shareText })}
+          className="rounded-xl border border-teal-600/40 px-3 py-2 text-sm font-medium text-teal-700 hover:bg-teal-600/10 dark:text-teal-300"
+        >
+          💬 Share as message
+        </button>
+        <button
+          onClick={shareLink}
+          className="rounded-xl border border-teal-600/40 px-3 py-2 text-sm font-medium text-teal-700 hover:bg-teal-600/10 dark:text-teal-300"
+        >
+          🔗 Share live link
+        </button>
+      </div>
+      {note && <p className="text-xs text-neutral-500">{note}</p>}
 
       <div>
         <div className="mb-1 text-xs font-medium uppercase text-neutral-400">Week</div>
@@ -117,8 +169,9 @@ export default function PrintControls({
       </div>
 
       <p className="text-xs text-neutral-500">
-        iPhone: Print → choose your printer (AirPrint). To save a PDF, pinch outwards on the preview
-        and Share → Save to Files.
+        <b>Message</b> sends this week as text (WhatsApp, Messages…). <b>Live link</b> gives Joy or
+        grandparents a read-only page that stays up to date. Printing on iPhone: choose your printer
+        (AirPrint); for a PDF, pinch outwards on the preview and Share.
       </p>
     </div>
   );

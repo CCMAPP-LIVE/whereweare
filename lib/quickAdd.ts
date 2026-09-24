@@ -548,7 +548,28 @@ function spanDays(span: NonNullable<ReturnType<typeof extractSpan>>) {
 }
 
 /** Parse a new-event message. `today` is YYYY-MM-DD in London. */
+/**
+ * "Remind Percy PE kit every Tuesday", "Reminder: swimming bag Thu",
+ * "Don't forget Bernie's library book Fri" → an all-day "🔔 …" entry, shown
+ * on the day and in the evening-before summary.
+ */
+const REMINDER = /^\s*(?:remind(?:er)?(?:\s+me)?(?:\s+to)?|don'?t\s+forget(?:\s+to)?)\s*:?\s*/i;
+
 export function parseNewEvent(text: string, dir: Directory, today: string): ParseResult {
+  const reminder = REMINDER.exec(text);
+  if (reminder) {
+    const inner = parseNewEvent(`${text.slice(reminder[0].length)} all day`, dir, today);
+    if (!inner.ok) return inner;
+    return {
+      ...inner,
+      events: inner.events.map((e) => ({
+        ...e,
+        title: `🔔 ${e.title}`,
+        startTime: null,
+        endTime: null,
+      })),
+    };
+  }
   const span = extractSpan(text, today);
   const when = span
     ? {

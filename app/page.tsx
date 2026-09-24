@@ -3,6 +3,8 @@ import { formatInTimeZone } from "date-fns-tz";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getEventsForUser } from "@/lib/calendars";
+import { findIssues, loadDigestData } from "@/lib/digest";
+import HeadsUp from "@/components/HeadsUp";
 import {
   daysForView,
   londonToday,
@@ -87,6 +89,7 @@ export default async function Home({
     { data: kidRows },
     { data: helperRows },
     external,
+    lookahead,
   ] = await Promise.all([
     supabase
       .from("availability")
@@ -136,6 +139,20 @@ export default async function Home({
         return { configured: true, perPerson };
       } catch {
         return { configured: false, perPerson: people.map(() => [] as NormalizedEvent[]) };
+      }
+    })(),
+    // Gaps / clashes over the next week, for the "Heads up" box.
+    (async () => {
+      try {
+        const next7 = Array.from({ length: 7 }, (_, i) => {
+          const d = new Date(`${today}T12:00:00Z`);
+          d.setUTCDate(d.getUTCDate() + i);
+          return d.toISOString().slice(0, 10);
+        });
+        const data = await loadDigestData(createAdminClient(), next7[0], next7[6]);
+        return findIssues(data, next7);
+      } catch {
+        return [];
       }
     })(),
   ]);
@@ -303,6 +320,7 @@ export default async function Home({
   return (
     <>
       <NavBar />
+      <HeadsUp issues={lookahead} />
       <CalendarView
         key={`${view}:${anchor}`}
         currentUserId={user.id}
