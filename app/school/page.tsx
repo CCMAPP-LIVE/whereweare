@@ -119,6 +119,11 @@ export default async function SchoolPage({
     <>
       <NavBar />
       <SchoolView
+        // Remount when the server data changes (week navigation, or new rows
+        // after "Fill this week"). router.refresh() preserves client useState,
+        // so without this the view would keep showing the first-loaded rows and
+        // freshly-generated pickups/drop-offs would never appear to be editable.
+        key={`${weekStart}:${events.length}:${defaults.length}`}
         currentUserId={user.id}
         people={people}
         kids={kids}
