@@ -6,6 +6,8 @@ import { buildWeekSheet, INCLUDE_KEYS, weekSheetText, type IncludeKey } from "@/
 import NavBar from "@/components/NavBar";
 import PrintControls from "@/components/PrintControls";
 import WeekSheetView from "@/components/WeekSheetView";
+import TermDatesView from "@/components/TermDatesView";
+import { loadTermRanges, termText, termWindow } from "@/lib/termDates";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +40,14 @@ export default async function PrintPage({
       : ["school", "events", "where"],
   );
 
-  const sheet = await buildWeekSheet(supabase, { weekStart, who, include });
+  const view = str("view") === "terms" ? "terms" : "week";
+  const kidFilter = who.startsWith("k:") ? who.slice(2) : null;
+  const win = termWindow(today);
+  const [sheet, terms] = await Promise.all([
+    buildWeekSheet(supabase, { weekStart, who, include }),
+    view === "terms" ? loadTermRanges(supabase, win.from, win.to, kidFilter) : Promise.resolve([]),
+  ]);
+  const termHeading = `School days off${kidFilter ? ` — ${sheet.whoLabel}` : ""}`;
   const thisWeek = weekStartOf(today);
   const nextWeek = format(addDays(parseISO(`${thisWeek}T12:00:00`), 7), "yyyy-MM-dd");
 
@@ -54,12 +63,21 @@ export default async function PrintPage({
           include={[...include]}
           people={sheet.people}
           kids={sheet.kids}
-          shareText={weekSheetText(sheet)}
+          view={view}
+          shareText={view === "terms" ? termText(terms, termHeading) : weekSheetText(sheet)}
         />
-        <WeekSheetView
-          sheet={sheet}
-          footer={`Where We Are · printed ${format(new Date(), "d MMM yyyy")}`}
-        />
+        {view === "terms" ? (
+          <TermDatesView
+            ranges={terms}
+            heading={termHeading}
+            footer={`Where We Are · from the school calendar · printed ${format(new Date(), "d MMM yyyy")}`}
+          />
+        ) : (
+          <WeekSheetView
+            sheet={sheet}
+            footer={`Where We Are · printed ${format(new Date(), "d MMM yyyy")}`}
+          />
+        )}
       </main>
     </>
   );

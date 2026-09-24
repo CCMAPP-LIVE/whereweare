@@ -5,6 +5,8 @@ import { londonToday, weekStartOf } from "@/lib/time";
 import { verifyShare } from "@/lib/shareLink";
 import { buildWeekSheet } from "@/lib/weekSheet";
 import WeekSheetView from "@/components/WeekSheetView";
+import TermDatesView from "@/components/TermDatesView";
+import { loadTermRanges, termWindow } from "@/lib/termDates";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -31,9 +33,14 @@ export default async function SharedWeekPage({ params }: { params: Promise<{ tok
   const thisWeek = weekStartOf(londonToday());
   const nextWeek = format(addDays(parseISO(`${thisWeek}T12:00:00`), 7), "yyyy-MM-dd");
   const include = new Set(share.include.filter((k) => k !== "calendars"));
-  const [a, b] = await Promise.all([
+  const win = termWindow(londonToday(), 120);
+  const kidFilter = share.who.startsWith("k:") ? share.who.slice(2) : null;
+  const [a, b, terms] = await Promise.all([
     buildWeekSheet(admin, { weekStart: thisWeek, who: share.who, include }),
     buildWeekSheet(admin, { weekStart: nextWeek, who: share.who, include }),
+    include.has("school")
+      ? loadTermRanges(admin, win.from, win.to, kidFilter)
+      : Promise.resolve([]),
   ]);
 
   return (
@@ -43,6 +50,13 @@ export default async function SharedWeekPage({ params }: { params: Promise<{ tok
       </p>
       <WeekSheetView sheet={a} footer={`Updated ${format(new Date(), "d MMM yyyy HH:mm")}`} />
       <WeekSheetView sheet={b} footer="" />
+      {terms.length > 0 && (
+        <TermDatesView
+          ranges={terms}
+          heading="School days off — next few months"
+          footer="From the school calendar"
+        />
+      )}
     </main>
   );
 }

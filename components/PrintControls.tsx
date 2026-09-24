@@ -22,6 +22,7 @@ export default function PrintControls({
   people,
   kids,
   shareText,
+  view,
 }: {
   week: string;
   thisWeek: string;
@@ -31,6 +32,7 @@ export default function PrintControls({
   people: Person[];
   kids: Person[];
   shareText: string;
+  view: "week" | "terms";
 }) {
   const router = useRouter();
   const [note, setNote] = useState<string | null>(null);
@@ -68,8 +70,9 @@ export default function PrintControls({
     );
   }
 
-  function go(next: { week?: string; who?: string; include?: string[] }) {
+  function go(next: { week?: string; who?: string; include?: string[]; view?: string }) {
     const q = new URLSearchParams({
+      view: next.view ?? view,
       week: next.week ?? week,
       who: next.who ?? who,
       include: (next.include ?? include).join(","),
@@ -93,7 +96,26 @@ export default function PrintControls({
   return (
     <div className="mb-4 space-y-3 print:hidden">
       <div className="flex items-center justify-between gap-2">
-        <h1 className="text-lg font-semibold">Print a week</h1>
+        <div className="flex rounded-xl bg-black/5 p-0.5 text-sm dark:bg-white/10">
+          {(
+            [
+              ["week", "Week sheet"],
+              ["terms", "School term dates"],
+            ] as const
+          ).map(([v, label]) => (
+            <button
+              key={v}
+              onClick={() => go({ view: v })}
+              className={`rounded-lg px-3 py-1.5 ${
+                view === v
+                  ? "bg-white font-medium shadow-sm dark:bg-neutral-800"
+                  : "text-neutral-500"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <button
           onClick={() => window.print()}
           className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700"
@@ -103,7 +125,9 @@ export default function PrintControls({
       </div>
       <div className="flex flex-wrap gap-2">
         <button
-          onClick={() => share({ title: "Week ahead", text: shareText })}
+          onClick={() =>
+            share({ title: view === "terms" ? "School days off" : "Week ahead", text: shareText })
+          }
           className="rounded-xl border border-teal-600/40 px-3 py-2 text-sm font-medium text-teal-700 hover:bg-teal-600/10 dark:text-teal-300"
         >
           💬 Share as message
@@ -117,24 +141,26 @@ export default function PrintControls({
       </div>
       {note && <p className="text-xs text-neutral-500">{note}</p>}
 
-      <div>
-        <div className="mb-1 text-xs font-medium uppercase text-neutral-400">Week</div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <button className={chip(week === thisWeek)} onClick={() => go({ week: thisWeek })}>
-            This week
-          </button>
-          <button className={chip(week === nextWeek)} onClick={() => go({ week: nextWeek })}>
-            Next week
-          </button>
-          <input
-            type="date"
-            value={week}
-            onChange={(e) => e.target.value && go({ week: e.target.value })}
-            className="rounded-full border border-black/10 bg-transparent px-3 py-1 text-sm dark:border-white/15"
-            aria-label="Week starting"
-          />
+      {view === "week" && (
+        <div>
+          <div className="mb-1 text-xs font-medium uppercase text-neutral-400">Week</div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button className={chip(week === thisWeek)} onClick={() => go({ week: thisWeek })}>
+              This week
+            </button>
+            <button className={chip(week === nextWeek)} onClick={() => go({ week: nextWeek })}>
+              Next week
+            </button>
+            <input
+              type="date"
+              value={week}
+              onChange={(e) => e.target.value && go({ week: e.target.value })}
+              className="rounded-full border border-black/10 bg-transparent px-3 py-1 text-sm dark:border-white/15"
+              aria-label="Week starting"
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       <div>
         <div className="mb-1 text-xs font-medium uppercase text-neutral-400">Who</div>
@@ -147,26 +173,28 @@ export default function PrintControls({
         </div>
       </div>
 
-      <div>
-        <div className="mb-1 text-xs font-medium uppercase text-neutral-400">Include</div>
-        <div className="flex flex-wrap gap-1.5">
-          {INCLUDES.map((o) => {
-            const on = include.includes(o.key);
-            return (
-              <button
-                key={o.key}
-                className={chip(on)}
-                onClick={() =>
-                  go({ include: on ? include.filter((k) => k !== o.key) : [...include, o.key] })
-                }
-              >
-                {on ? "✓ " : ""}
-                {o.label}
-              </button>
-            );
-          })}
+      {view === "week" && (
+        <div>
+          <div className="mb-1 text-xs font-medium uppercase text-neutral-400">Include</div>
+          <div className="flex flex-wrap gap-1.5">
+            {INCLUDES.map((o) => {
+              const on = include.includes(o.key);
+              return (
+                <button
+                  key={o.key}
+                  className={chip(on)}
+                  onClick={() =>
+                    go({ include: on ? include.filter((k) => k !== o.key) : [...include, o.key] })
+                  }
+                >
+                  {on ? "✓ " : ""}
+                  {o.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       <p className="text-xs text-neutral-500">
         <b>Message</b> sends this week as text (WhatsApp, Messages…). <b>Live link</b> gives Joy or
