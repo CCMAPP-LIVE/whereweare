@@ -12,10 +12,16 @@ features:
     home_tab_enabled: false
     messages_tab_enabled: true
     messages_tab_read_only_enabled: false
+  slash_commands:
+    - command: /event
+      url: https://whereweare.vercel.app/api/slack/commands
+      description: Add an event to Where We Are
+      should_escape: false
 oauth_config:
   scopes:
     bot:
       - chat:write
+      - commands
       - channels:history
       - groups:history
       - im:history
