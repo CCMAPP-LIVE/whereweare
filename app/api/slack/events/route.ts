@@ -165,7 +165,11 @@ async function handleMessage(event: SlackMessageEvent) {
       const res = await createWeekEvent(admin, userId, ev);
       created.push({ id: res.id, title: ev.title });
       if (!res.lifeSynced) lifeWarning = true;
-      if (!parsed.seriesNote) lines.push(`✅ Added ${describe(dir, ev)}`);
+      if (!parsed.seriesNote && !parsed.spanLabel) lines.push(`✅ Added ${describe(dir, ev)}`);
+    }
+    // A multi-day event gets one line showing start → finish.
+    if (parsed.spanLabel) {
+      lines.push(`✅ Added ${describe(dir, parsed.events[0], parsed.spanLabel)}`);
     }
     // A repeating series gets one summary line rather than one per date.
     if (parsed.seriesNote) {
@@ -179,7 +183,7 @@ async function handleMessage(event: SlackMessageEvent) {
       ids: created.map((c) => c.id),
       undoIds: created.map((c) => c.id),
       // Edit buttons for one-offs only; a series is changed by replying in the thread.
-      editable: parsed.seriesNote ? [] : created,
+      editable: parsed.seriesNote || parsed.spanLabel ? [] : created,
     });
   } catch (e) {
     console.error("slack handleMessage failed", e);

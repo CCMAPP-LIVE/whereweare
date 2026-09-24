@@ -37,14 +37,14 @@ export function whoName(dir: Directory, ev: Pick<WeekEventInput, "helperId" | "a
 }
 
 /** "*Swimming* · Percy · Thu 2 Oct, 16:00–17:00 · David" */
-export function describe(dir: Directory, ev: WeekEventInput): string {
+export function describe(dir: Directory, ev: WeekEventInput, whenOverride?: string): string {
   const bits = [`*${ev.title}*`];
   const kidNames = dir.kids.filter((k) => ev.kidIds.includes(k.id)).map((k) => k.name);
   if (kidNames.length) bits.push(kidNames.join(" & "));
   let when = format(parseISO(`${ev.day}T12:00:00`), "EEE d MMM");
   if (ev.startTime) when += `, ${ev.startTime}${ev.endTime ? `–${ev.endTime}` : ""}`;
   else when += " (all day)";
-  bits.push(when);
+  bits.push(whenOverride ?? when);
   // Unassigned = shared by the household, so name both adults.
   bits.push(whoName(dir, ev) ?? dir.people.map((p) => p.name).join(" & "));
   return bits.join(" · ");

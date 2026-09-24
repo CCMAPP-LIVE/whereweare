@@ -1,5 +1,5 @@
 import * as chrono from "chrono-node";
-import { addDays, format, getISODay, parseISO } from "date-fns";
+import { addDays, differenceInCalendarDays, format, getISODay, parseISO } from "date-fns";
 
 /**
  * Rule-based parser that turns a short chat message ("Percy swimming Thu 4-5")
@@ -94,7 +94,13 @@ export type ParsedEvent = {
 };
 
 export type ParseResult =
-  | { ok: true; events: ParsedEvent[]; seriesNote: string | null }
+  | {
+      ok: true;
+      events: ParsedEvent[];
+      seriesNote: string | null;
+      /** Set when one event spans several days: "Sat 10 Oct 18:00 → Sun 11 Oct 09:00". */
+      spanLabel: string | null;
+    }
   | { ok: false; message: string };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -151,17 +157,21 @@ function extractTimes(text: string, dayPart: "am" | "pm" | null = null): {
   end: string | null;
 } {
   const notDate = String.raw`(?!\s*(?:st|nd|rd|th)\b)(?!\s*\/)(?!\s*(?:${MONTHS}))`;
-  const notAfterDate = String.raw`(?<!\/)(?<!(?:${MONTHS})[a-z]*\s)`;
 
   // Ranges: "4-5", "4pm-5:30", "9 to 11am", "2 till 4"
   const range = new RegExp(
-    String.raw`${notAfterDate}\b${TIME}\s*(?:-|to|till|til|until)\s*${TIME}\b${notDate}`,
-    "i",
+    String.raw`(?<!\/)\b${TIME}\s*(?:-|to|till|til|until)\s*${TIME}\b${notDate}`,
+    "gi",
   );
-  const r = range.exec(text);
-  if (r && Number(r[1]) <= 23 && Number(r[4]) <= 23) {
+  const monthBefore = new RegExp(String.raw`(?:\/|\b(?:${MONTHS})[a-z]*\s+)$`, "i");
+  let r: RegExpExecArray | null;
+  while ((r = range.exec(text))) {
+    if (Number(r[1]) > 23 || Number(r[4]) > 23) continue;
     const a = tok(r[1], r[2], r[3]);
     const b = tok(r[4], r[5], r[6]);
+    // "14 Oct 2-4pm" is fine, but "Oct 2-4" alone is a date range, not times.
+    const explicit = !!(r[2] || r[3] || r[5] || r[6]);
+    if (!explicit && monthBefore.test(text.slice(0, r.index))) continue;
     // "2-4pm": the end's am/pm applies to the start too.
     const startMin = resolveTime(a, a.mer ?? b.mer ?? dayPart);
     let endMin = resolveTime(b, b.mer ?? dayPart);
@@ -399,9 +409,108 @@ function tidyTitle(words: string): string {
 
 // ─── Public API ───────────────────────────────────────────────────────────
 
+/** Longest span one message can create (one entry per day). */
+const SPAN_MAX_DAYS = 31;
+
+/**
+ * A start and finish on different days ("from 6pm on 10 Oct to 9am on 11 Oct",
+ * "Sat 6pm to Sun 9am", "Cornwall 20-24 Oct"). The planner stores one day per
+ * entry, so this becomes one entry per day: first day from the start time,
+ * middle days all day, last day until the finish time.
+ */
+function extractSpan(text: string, today: string) {
+  const clean = normaliseSpokenTimes(stripFormatting(text).replace(/[–—]/g, "-"));
+  // Repeats ("Tuesdays 4-5 until 15 Dec") are handled elsewhere.
+  if (/\b(every|each|weekly|fortnightly|biweekly)\b|\b(mon|tues|wednes|thurs|fri|satur|sun)days\b/i.test(clean))
+    return null;
+  const base = parseISO(`${today}T12:00:00`);
+
+  // "Fri 6 until Sat 10", "Sat 6pm to Sun 9am", "tonight 7 till tomorrow 11":
+  // weekday + time → weekday + time, with the house am/pm rule on bare hours.
+  const DAYW = String.raw`(today|tonight|tomorrow|(?:next\s+)?(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*)`;
+  const T = String.raw`(\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)?)`;
+  const wk = new RegExp(
+    String.raw`\b(?:from\s+)?${DAYW}\s+(?:at\s+)?${T}\s*(?:-|to|until|till|til)\s*${DAYW}\s+(?:at\s+)?${T}\b`,
+    "i",
+  ).exec(clean);
+  if (wk) {
+    const noRepeat: Repeat = { interval: 1, weeks: null, until: null, on: false };
+    const startDay = extractDays(` ${wk[1].replace(/tonight/i, "today")} `, today, noRepeat).days[0];
+    // The finish weekday is the first one on/after the start day.
+    const endFromStart = extractDays(` ${wk[3].replace(/tonight/i, "today")} `, startDay ?? today, noRepeat).days[0];
+    const startTime = extractTimes(` ${wk[2]} `, /tonight/i.test(wk[1]) ? "pm" : null).start;
+    const endTime = extractTimes(` ${wk[4]} `).start;
+    if (startDay && endFromStart && endFromStart > startDay && startTime && endTime) {
+      const days = differenceInCalendarDays(parseISO(endFromStart), parseISO(startDay));
+      if (days <= SPAN_MAX_DAYS) {
+        return {
+          rest: cut(clean, wk.index, wk[0].length),
+          startDay,
+          endDay: endFromStart,
+          startTime,
+          endTime,
+        };
+      }
+    }
+  }
+
+  for (const r of chrono.en.GB.parse(clean, base, { forwardDate: true })) {
+    if (!r.end) continue;
+    // "Sat 10 until 13 Dec" means Saturdays at 10 until 13 Dec, not 10–13 Dec.
+    if (/^(?:from\s+)?(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*\s+\d{1,2}\b(?!\s*(?:st|nd|rd|th|\/|:|am|pm|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))/i.test(r.text))
+      continue;
+    const ymd = (c: typeof r.start) =>
+      `${c.get("year")}-${pad(c.get("month")!)}-${pad(c.get("day")!)}`;
+    const startDay = ymd(r.start);
+    const endDay = ymd(r.end);
+    const days = differenceInCalendarDays(parseISO(endDay), parseISO(startDay));
+    if (days < 1 || days > SPAN_MAX_DAYS) continue;
+    const hhmm = (c: typeof r.start) =>
+      c.isCertain("hour") ? `${pad(c.get("hour")!)}:${pad(c.get("minute") ?? 0)}` : null;
+    // chrono reads bare hours literally; apply the house am/pm rule to those.
+    const houseRule = (c: typeof r.start) => {
+      const t = hhmm(c);
+      if (!t || c.isCertain("meridiem") || c.get("hour")! > 12) return t;
+      const [h, m] = t.split(":").map(Number);
+      return `${pad(bareHourTo24(h))}:${pad(m)}`;
+    };
+    // Strip "from"/"between" just before the matched text so it doesn't end up in the title.
+    const before = clean.slice(0, r.index).replace(/\b(from|between)\s*$/i, "");
+    return {
+      rest: ` ${before} ${GAP} ${clean.slice(r.index + r.text.length)} `,
+      startDay,
+      endDay,
+      startTime: houseRule(r.start),
+      endTime: houseRule(r.end),
+    };
+  }
+  return null;
+}
+
+/** Expand a span into one entry per day. */
+function spanDays(span: NonNullable<ReturnType<typeof extractSpan>>) {
+  const out: { day: string; startTime: string | null; endTime: string | null }[] = [];
+  const total = differenceInCalendarDays(parseISO(span.endDay), parseISO(span.startDay));
+  for (let i = 0; i <= total; i++) {
+    const day = format(addDays(parseISO(`${span.startDay}T12:00:00`), i), "yyyy-MM-dd");
+    if (i === 0 && span.startTime) out.push({ day, startTime: span.startTime, endTime: "23:59" });
+    else if (i === total && span.endTime) out.push({ day, startTime: "00:00", endTime: span.endTime });
+    else out.push({ day, startTime: null, endTime: null });
+  }
+  return out;
+}
+
 /** Parse a new-event message. `today` is YYYY-MM-DD in London. */
 export function parseNewEvent(text: string, dir: Directory, today: string): ParseResult {
-  const when = extractWhen(text, today);
+  const span = extractSpan(text, today);
+  const when = span
+    ? {
+        rest: span.rest,
+        times: { start: null, end: null },
+        days: [span.startDay],
+        seriesNote: null,
+      }
+    : extractWhen(text, today);
   let rest = when.rest;
   const times = when.times;
   if (when.days.length === 0) {
@@ -447,15 +556,25 @@ export function parseNewEvent(text: string, dir: Directory, today: string): Pars
   const startTime = times.start;
   const endTime = startTime ? (times.end ?? addMinutes(startTime, DEFAULT_DURATION_MIN)) : null;
 
+  const fmt = (day: string, time: string | null) =>
+    `${format(parseISO(`${day}T12:00:00`), "EEE d MMM")}${time ? ` ${time}` : ""}`;
+  const spanLabel = span
+    ? `${fmt(span.startDay, span.startTime)} → ${fmt(span.endDay, span.endTime)}`
+    : null;
+  const slots = span
+    ? spanDays(span)
+    : when.days.map((day) => ({ day, startTime, endTime }));
+
   return {
     ok: true,
     seriesNote: when.seriesNote,
-    events: when.days.map((day) => ({
+    spanLabel,
+    events: slots.map(({ day, startTime, endTime }) => ({
       title: title.slice(0, 200),
       day,
       startTime,
       endTime,
-      notes,
+      notes: spanLabel ? [spanLabel, notes].filter(Boolean).join(" · ") : notes,
       kidIds: (sharedWord && WHOLE_FAMILY.test(sharedWord[1]) ? dir.kids : kidsRes.found).map(
         (k) => k.id,
       ),
