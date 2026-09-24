@@ -1,7 +1,7 @@
 import { after, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { appUserForSlackUser, eventIdsInThread, slackApi, verifySlackRequest } from "@/lib/slack";
-import { parseNewEvent, parseThreadReply, shiftEnd } from "@/lib/quickAdd";
+import { moveBase, notInPast, parseNewEvent, parseThreadReply, shiftEnd } from "@/lib/quickAdd";
 import { describe, loadDirectory, postConfirmation, rowToInput } from "@/lib/slackUi";
 import { addDays, differenceInCalendarDays, format, parseISO } from "date-fns";
 import { createWeekEvent, deleteWeekEvent, updateWeekEvent } from "@/lib/weekEvents";
@@ -83,7 +83,8 @@ async function handleMessage(event: SlackMessageEvent) {
       const rows = existingIds
         .map((id) => (data ?? []).find((r) => r.id === id))
         .filter((r): r is NonNullable<typeof r> => !!r);
-      const cmd = parseThreadReply(text, dir, today);
+      const cmd = parseThreadReply(text, dir, rows.length ? moveBase(text, rows[0].day, today) : today);
+      if (cmd.kind === "change") cmd.day = notInPast(cmd.day, today);
       if (cmd.kind === "unknown" || !rows.length) {
         await reply(
           rows.length

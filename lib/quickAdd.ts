@@ -365,7 +365,7 @@ function extractDays(
 }
 
 /** Shared front half of both parsers: spoken times, day parts, relative dates, times, days. */
-function extractWhen(text: string, today: string) {
+export function extractWhen(text: string, today: string) {
   let rest = ` ${normaliseSpokenTimes(stripFormatting(text).replace(/[–—]/g, "-"))} `;
   let dayPart: "am" | "pm" | null = null;
   let impliesToday = false;
@@ -405,7 +405,7 @@ function findNames<T extends { id: string; name: string }>(text: string, list: T
   return { rest, found };
 }
 
-function tidyTitle(words: string): string {
+export function tidyTitle(words: string): string {
   let parts = words
     .replace(/[,;:!?()"“”]+/g, " ")
     .replace(/\s+&\s+|\s+\+\s+/g, " ")
@@ -677,6 +677,23 @@ export function parseThreadReply(text: string, dir: Directory, today: string): T
     assigneeUserId: person?.id ?? (me ? dir.senderId : null),
     helperId: helper?.id ?? null,
   };
+}
+
+/**
+ * "Move to Fri" should mean the Friday in the event's own week, not the next
+ * Friday from today. For a plain weekday (no date, "next", "tomorrow"...),
+ * resolve relative to the Monday of the event's week.
+ */
+export function notInPast(day: string | null, today: string): string | null {
+  if (!day || day >= today) return day;
+  return format(addDays(parseISO(`${day}T12:00:00`), 7), "yyyy-MM-dd");
+}
+
+export function moveBase(text: string, eventDay: string, today: string): string {
+  if (/\b(today|tonight|tomorrow|tmrw|next|week|after|in\s+\d|\d{1,2}(?:st|nd|rd|th)?\s+[a-z]{3}|\d{1,2}\/\d)/i.test(text))
+    return today;
+  const d = parseISO(`${eventDay}T12:00:00`);
+  return format(addDays(d, 1 - getISODay(d)), "yyyy-MM-dd");
 }
 
 /** Keep an event's duration when only its start time moves. */
