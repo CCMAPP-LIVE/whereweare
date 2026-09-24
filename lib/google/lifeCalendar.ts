@@ -21,8 +21,9 @@ function lifeCalendarClient() {
  */
 function lifeEventId(userId: string, day: string): string {
   const hex = crypto.createHash("sha1").update(`wwa-avail:${userId}:${day}`).digest("hex");
-  // hex digits 0-9a-f are all valid base32hex characters.
-  return `wwa${hex}`;
+  // hex digits 0-9a-f are all valid base32hex characters (a prefix like "wwa"
+  // is NOT — "w" is outside a-v and Google rejects the id).
+  return `a0${hex}`;
 }
 
 async function buildSummary(admin: Admin, userId: string, day: string, name: string) {

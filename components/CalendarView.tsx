@@ -7,6 +7,7 @@ import { dayLabel, shiftAnchor, viewRangeLabel, type CalView } from "@/lib/time"
 import type { Slot, Status } from "@/lib/types";
 import NewEventModal from "@/components/NewEventModal";
 import DayCommentsModal from "@/components/DayCommentsModal";
+import AddedEventSheet from "@/components/AddedEventSheet";
 
 export type EventLite = {
   id: string;
@@ -530,7 +531,7 @@ function DayCard({
                 </div>
               </div>
               <TimesLine t={t} />
-              <EventList items={evs} />
+              <EventList items={evs} day={day} />
             </div>
           );
         })}
@@ -549,7 +550,7 @@ function DayCard({
                   <span className="text-sm font-medium text-amber-700 dark:text-amber-300">
                     {k.name}
                   </span>
-                  <EventList items={kevs} />
+                  <EventList items={kevs} day={day} />
                 </div>
               );
             })}
@@ -676,28 +677,59 @@ function SlotChip({
   );
 }
 
-function EventList({ items }: { items: EventLite[] }) {
+function EventList({ items, day }: { items: EventLite[]; day: string }) {
+  const [open, setOpen] = useState<EventLite | null>(null);
   if (items.length === 0) return null;
   return (
-    <ul className="mt-2 space-y-0.5 border-t border-black/5 pt-2 dark:border-white/5">
-      {items.map((ev) => (
-        <li
-          key={ev.id}
-          title={ev.calendarLabel}
-          className="flex items-center gap-1.5 text-[11px] text-neutral-500"
-        >
-          <span
-            className="inline-block h-2 w-2 shrink-0 rounded-full"
-            style={{ background: ev.color ?? "#9ca3af" }}
-          />
-          <span className="shrink-0 tabular-nums">{ev.time}</span>
-          <span className="max-w-[72px] shrink-0 truncate rounded bg-black/5 px-1 text-[9px] uppercase tracking-wide text-neutral-400 dark:bg-white/10">
-            {ev.calendarLabel}
-          </span>
-          <span className="truncate">{ev.title}</span>
-        </li>
-      ))}
-    </ul>
+    <>
+      <ul className="mt-2 space-y-0.5 border-t border-black/5 pt-2 dark:border-white/5">
+        {items.map((ev) => {
+          const row = (
+            <>
+              <span
+                className="inline-block h-2 w-2 shrink-0 rounded-full"
+                style={{ background: ev.color ?? "#9ca3af" }}
+              />
+              <span className="shrink-0 tabular-nums">{ev.time}</span>
+              <span className="max-w-[72px] shrink-0 truncate rounded bg-black/5 px-1 text-[9px] uppercase tracking-wide text-neutral-400 dark:bg-white/10">
+                {ev.calendarLabel}
+              </span>
+              <span className="truncate">{ev.title}</span>
+            </>
+          );
+          // In-app events ("we:<id>" / "we:<id>:<kid>") can be opened to delete or edit.
+          return ev.id.startsWith("we:") ? (
+            <li key={ev.id}>
+              <button
+                type="button"
+                onClick={() => setOpen(ev)}
+                title="Tap to delete or edit"
+                className="-mx-1 flex w-[calc(100%+0.5rem)] items-center gap-1.5 rounded px-1 text-left text-[11px] text-neutral-500 hover:bg-black/5 dark:hover:bg-white/10"
+              >
+                {row}
+              </button>
+            </li>
+          ) : (
+            <li
+              key={ev.id}
+              title={ev.calendarLabel}
+              className="flex items-center gap-1.5 text-[11px] text-neutral-500"
+            >
+              {row}
+            </li>
+          );
+        })}
+      </ul>
+      {open && (
+        <AddedEventSheet
+          eventId={open.id.split(":")[1]}
+          title={open.title}
+          time={open.time}
+          day={day}
+          onClose={() => setOpen(null)}
+        />
+      )}
+    </>
   );
 }
 
