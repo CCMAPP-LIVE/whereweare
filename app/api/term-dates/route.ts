@@ -51,13 +51,28 @@ export async function POST(request: Request) {
   const have = new Set((existing ?? []).map((e) => `${e.title}|${e.day}`));
   const kidIds = (kids ?? []).map((k) => k.id);
 
-  // One all-day entry per day (long holidays capped at 31 days).
+  // One all-day entry per school day. Weekends inside a holiday are skipped
+  // (single-day entries are kept even on a weekend); long holidays up to 60
+  // days; duplicate entries in the feed are ignored.
   const todo: { title: string; day: string }[] = [];
+  const queued = new Set<string>();
   for (const ev of parseIcs(ics)) {
     const title = `🏫 ${ev.title}`.slice(0, 200);
+    const multiDay = addDays(parseISO(`${ev.start}T12:00:00`), 1) < parseISO(`${ev.end}T12:00:00`);
     let d = ev.start;
-    for (let i = 0; d < ev.end && i < 31; i++) {
-      if (d >= today && d <= horizon && !have.has(`${title}|${d}`)) todo.push({ title, day: d });
+    for (let i = 0; d < ev.end && i < 60; i++) {
+      const weekday = parseISO(`${d}T12:00:00`).getDay(); // 0 Sun … 6 Sat
+      const key = `${title}|${d}`;
+      if (
+        d >= today &&
+        d <= horizon &&
+        !(multiDay && (weekday === 0 || weekday === 6)) &&
+        !have.has(key) &&
+        !queued.has(key)
+      ) {
+        todo.push({ title, day: d });
+        queued.add(key);
+      }
       d = format(addDays(parseISO(`${d}T12:00:00`), 1), "yyyy-MM-dd");
     }
   }
