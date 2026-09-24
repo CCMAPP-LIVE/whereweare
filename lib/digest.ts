@@ -100,20 +100,21 @@ export function findIssues(d: DigestData, days: string[]): Issue[] {
   const slotLabel = (s: Slot) => SLOTS.find((x) => x.value === s)!.label;
 
   // Imported school calendar days off ("🏫 Half Term", "🏫 INSET day").
-  const noSchool = new Map<string, string>();
+  const noSchool = new Map<string, string>(); // "day|kidId" → "Half Term"
   for (const e of d.events)
     if (
       /^🏫/.test(e.title) &&
       /holiday|half.?term|inset|training|closed|no school|bank/i.test(e.title)
     )
-      noSchool.set(e.day, e.title.replace(/^🏫\s*/, ""));
+      for (const k of e.kid_ids.length ? e.kid_ids : d.kids.map((x) => x.id))
+        noSchool.set(`${e.day}|${k}`, e.title.replace(/^🏫\s*/, ""));
 
   for (const s of d.school) {
     if (!daySet.has(s.day)) continue;
-    if (noSchool.has(s.day)) {
+    if (noSchool.has(`${s.day}|${s.kid_id}`)) {
       issues.push({
         day: s.day,
-        text: `${kid.get(s.kid_id) ?? ""}'s ${s.kind === "drop" ? "drop-off" : "pickup"} is set but it's ${noSchool.get(s.day)}`,
+        text: `${kid.get(s.kid_id) ?? ""}'s ${s.kind === "drop" ? "drop-off" : "pickup"} is set but it's ${noSchool.get(`${s.day}|${s.kid_id}`)}`,
       });
       continue;
     }

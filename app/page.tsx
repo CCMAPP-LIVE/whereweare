@@ -231,7 +231,15 @@ export default async function Home({
   for (const we of weekEvents ?? []) {
     // School calendar imports ("🏫 Half Term") show as a badge on the day, not a row entry.
     if (we.title.startsWith("🏫")) {
-      const label = we.title.replace(/^🏫\s*/, "");
+      const off = (we.kid_ids ?? []).length;
+      const label =
+        we.title.replace(/^🏫\s*/, "") +
+        (off && off < (kidRows ?? []).length
+          ? ` — ${(we.kid_ids ?? [])
+              .map((k: string) => (kidRows ?? []).find((r) => r.id === k)?.name)
+              .filter(Boolean)
+              .join(" & ")}`
+          : "");
       if (!(termByDay[we.day] ??= []).includes(label)) termByDay[we.day].push(label);
       continue;
     }

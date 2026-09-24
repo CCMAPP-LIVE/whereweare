@@ -3,8 +3,9 @@
 import { useState } from "react";
 
 /** Settings: import school holidays / INSET days from the school's calendar. */
-export default function TermDatesImport() {
+export default function TermDatesImport({ kids }: { kids: { id: string; name: string }[] }) {
   const [url, setUrl] = useState("");
+  const [kidIds, setKidIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -15,7 +16,7 @@ export default function TermDatesImport() {
       const res = await fetch("/api/term-dates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...body, kidIds }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "Import failed");
@@ -33,6 +34,29 @@ export default function TermDatesImport() {
 
   return (
     <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-1.5 text-sm">
+        <span className="text-xs text-neutral-500">Which school is it for?</span>
+        {kids.map((k) => {
+          const on = kidIds.includes(k.id);
+          return (
+            <button
+              key={k.id}
+              type="button"
+              onClick={() =>
+                setKidIds((cur) => (on ? cur.filter((x) => x !== k.id) : [...cur, k.id]))
+              }
+              className={`rounded-full border px-3 py-1 text-xs ${
+                on
+                  ? "border-amber-400 bg-amber-200/70 text-amber-900 dark:bg-amber-500/20 dark:text-amber-200"
+                  : "border-black/10 dark:border-white/15"
+              }`}
+            >
+              {on ? "✓ " : ""}
+              {k.name}
+            </button>
+          );
+        })}
+      </div>
       <div className="flex gap-2">
         <input
           value={url}
@@ -42,7 +66,7 @@ export default function TermDatesImport() {
         />
         <button
           onClick={() => run({ url })}
-          disabled={busy || !url.trim()}
+          disabled={busy || !url.trim() || !kidIds.length}
           className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-50"
         >
           {busy ? "Importing…" : "Import"}
@@ -53,7 +77,7 @@ export default function TermDatesImport() {
         <input
           type="file"
           accept=".ics,text/calendar"
-          disabled={busy}
+          disabled={busy || !kidIds.length}
           onChange={async (e) => {
             const f = e.target.files?.[0];
             if (f) run({ ics: await f.text() });

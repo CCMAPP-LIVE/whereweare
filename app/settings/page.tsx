@@ -39,9 +39,7 @@ function Section({
   return (
     <section className="rounded-2xl border border-black/10 p-4 dark:border-white/10">
       <h2 className="font-semibold">{title}</h2>
-      {description && (
-        <p className="mb-3 mt-0.5 text-sm text-neutral-500">{description}</p>
-      )}
+      {description && <p className="mb-3 mt-0.5 text-sm text-neutral-500">{description}</p>}
       <div className={description ? "" : "mt-3"}>{children}</div>
     </section>
   );
@@ -54,6 +52,7 @@ export default async function SettingsPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  const { data: termKids } = await supabase.from("kids").select("id, name").order("sort_order");
   const { data: profile } = await supabase
     .from("profiles")
     .select("display_name")
@@ -76,7 +75,10 @@ export default async function SettingsPage() {
       <main className="mx-auto w-full max-w-2xl flex-1 space-y-5 p-4">
         <h1 className="text-2xl font-semibold">Settings</h1>
 
-        <Section title="Your name" description="Shown on the shared week view and on the Life calendar.">
+        <Section
+          title="Your name"
+          description="Shown on the shared week view and on the Life calendar."
+        >
           <ProfileForm userId={user.id} initialName={profile?.display_name ?? ""} />
         </Section>
 
@@ -86,8 +88,7 @@ export default async function SettingsPage() {
         >
           {configError ? (
             <p className="text-sm text-amber-600">
-              Calendar setup isn’t complete yet (missing service-role key). See
-              README.
+              Calendar setup isn’t complete yet (missing service-role key). See README.
             </p>
           ) : (
             <ConnectAccounts
@@ -106,8 +107,7 @@ export default async function SettingsPage() {
         >
           {configError ? (
             <p className="text-sm text-amber-600">
-              Calendar setup isn’t complete yet (missing service-role key). See
-              README.
+              Calendar setup isn’t complete yet (missing service-role key). See README.
             </p>
           ) : (
             <CalendarLabelEditor accounts={accounts} />
@@ -116,9 +116,9 @@ export default async function SettingsPage() {
 
         <Section
           title="School term dates"
-          description="Paste the school's calendar link (often under “Subscribe” or “iCal” on the school website) to add holidays and INSET days as “🏫 …” all-day entries for the kids. Run again any time to pick up new dates."
+          description="Pick which child the school is for, then paste its calendar link (often “Subscribe” / “iCal” on the school website) to add holidays and INSET days. Import each school separately. Run again any time to pick up new dates."
         >
-          <TermDatesImport />
+          <TermDatesImport kids={termKids ?? []} />
         </Section>
 
         <Section

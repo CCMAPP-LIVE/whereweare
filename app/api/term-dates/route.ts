@@ -46,10 +46,18 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
   const [{ data: kids }, { data: existing }] = await Promise.all([
     admin.from("kids").select("id"),
-    admin.from("week_events").select("title, day").like("title", "🏫 %").gte("day", today),
+    admin.from("week_events").select("title, day, kid_ids").like("title", "🏫 %").gte("day", today),
   ]);
-  const have = new Set((existing ?? []).map((e) => `${e.title}|${e.day}`));
-  const kidIds = (kids ?? []).map((k) => k.id);
+  // Which children this school's dates apply to (default: all).
+  const allKids = (kids ?? []).map((k) => k.id);
+  const chosen: string[] = Array.isArray(body.kidIds)
+    ? body.kidIds.filter((k: unknown): k is string => typeof k === "string" && allKids.includes(k))
+    : [];
+  const kidIds = chosen.length ? chosen : allKids;
+  const kidKey = [...kidIds].sort().join(",");
+  const have = new Set(
+    (existing ?? []).map((e) => `${e.title}|${e.day}|${[...(e.kid_ids ?? [])].sort().join(",")}`),
+  );
 
   // One all-day entry per school day. Weekends inside a holiday are skipped
   // (single-day entries are kept even on a weekend); long holidays up to 60
@@ -62,7 +70,7 @@ export async function POST(request: Request) {
     let d = ev.start;
     for (let i = 0; d < ev.end && i < 60; i++) {
       const weekday = parseISO(`${d}T12:00:00`).getDay(); // 0 Sun … 6 Sat
-      const key = `${title}|${d}`;
+      const key = `${title}|${d}|${kidKey}`;
       if (
         d >= today &&
         d <= horizon &&
