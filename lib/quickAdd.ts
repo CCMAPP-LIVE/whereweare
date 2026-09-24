@@ -100,10 +100,17 @@ function addMinutes(hhmm: string, mins: number): string {
   return toHHmm(Math.min(h * 60 + m + mins, 23 * 60 + 59));
 }
 
-/** Remove a matched span from the working text, leaving a space. */
+/**
+ * Remove a matched span from the working text, leaving a gap marker so
+ * tidyTitle knows a date/time/name used to be there.
+ */
+const GAP = "¦";
 function cut(text: string, index: number, length: number): string {
-  return `${text.slice(0, index)} ${text.slice(index + length)}`;
+  return `${text.slice(0, index)} ${GAP} ${text.slice(index + length)}`;
 }
+
+/** Slack formatting (*bold*, _italic_, ~strike~, `code`) isn't part of the words. */
+const stripFormatting = (text: string) => text.replace(/[*_~`]/g, "");
 
 const MONTHS = "jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec";
 
@@ -317,7 +324,7 @@ function extractDays(
 
 /** Shared front half of both parsers: spoken times, day parts, relative dates, times, days. */
 function extractWhen(text: string, today: string) {
-  let rest = ` ${normaliseSpokenTimes(text.replace(/[–—]/g, "-"))} `;
+  let rest = ` ${normaliseSpokenTimes(stripFormatting(text).replace(/[–—]/g, "-"))} `;
   let dayPart: "am" | "pm" | null = null;
   let impliesToday = false;
   for (const dp of DAY_PARTS) {
@@ -355,11 +362,25 @@ function findNames<T extends { id: string; name: string }>(text: string, list: T
 }
 
 function tidyTitle(words: string): string {
-  const parts = words
+  let parts = words
     .replace(/[,;:!?()"“”]+/g, " ")
     .replace(/\s+&\s+|\s+\+\s+/g, " ")
     .split(/\s+/)
     .filter(Boolean);
+  // Drop linking words whose object was pulled out: "meeting for ¦me at ¦7pm
+  // on ¦monday at scout hut" → "meeting at scout hut". Repeat until stable.
+  for (let changed = true; changed; ) {
+    changed = false;
+    parts = parts.filter((w, i) => {
+      const next = parts[i + 1];
+      if (FILLER.has(w.toLowerCase()) && (next === undefined || next === GAP)) {
+        changed = true;
+        return false;
+      }
+      return true;
+    });
+  }
+  parts = parts.filter((w) => w !== GAP);
   while (parts.length && FILLER.has(parts[0].toLowerCase())) parts.shift();
   while (parts.length && FILLER.has(parts[parts.length - 1].toLowerCase())) parts.pop();
   const s = parts.join(" ").replace(/^[-–.\s]+|[-–.\s]+$/g, "");
@@ -431,6 +452,7 @@ export type ThreadCommand =
   | { kind: "cancel" }
   | {
       kind: "change";
+      title: string | null;
       day: string | null;
       startTime: string | null;
       endTime: string | null;
@@ -439,8 +461,32 @@ export type ThreadCommand =
     }
   | { kind: "unknown" };
 
-/** Parse a reply in a confirmation thread: "cancel", "5pm", "move to Fri", "Ashley's doing it". */
+/**
+ * Parse a reply in a confirmation thread: "cancel", "5pm", "move to Fri",
+ * "Ashley's doing it", "rename to Beavers meeting".
+ */
 export function parseThreadReply(text: string, dir: Directory, today: string): ThreadCommand {
+  // Rename: "change to X", "rename it X", "call it X" — when X has no day/time in it.
+  const rn =
+    /^\s*(?:(?:can|could)\s+you\s+|please\s+)?(?:rename(?:\s+it)?|change(?:\s+(?:it|the\s+(?:name|title)|name|title))?|call\s+it|name\s+it)\s+(?:to\s+)?(.+?)[?.!\s]*$/i.exec(
+      stripFormatting(text),
+    );
+  if (rn) {
+    const w = extractWhen(rn[1], today);
+    const title = tidyTitle(rn[1]);
+    if (!w.times.start && !w.days.length && title) {
+      return {
+        kind: "change",
+        title: title.slice(0, 200),
+        day: null,
+        startTime: null,
+        endTime: null,
+        assigneeUserId: null,
+        helperId: null,
+      };
+    }
+  }
+
   if (/\b(cancel(?:led)?|delete|remove|scrap|not happening|called off)\b/i.test(text))
     return { kind: "cancel" };
 
@@ -455,6 +501,7 @@ export function parseThreadReply(text: string, dir: Directory, today: string): T
   if (!times.start && !dates.days.length && !helper && !person && !me) return { kind: "unknown" };
   return {
     kind: "change",
+    title: null,
     day: dates.days[0] ?? null,
     startTime: times.start,
     endTime: times.start ? (times.end ?? null) : null,

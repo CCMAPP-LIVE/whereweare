@@ -87,7 +87,7 @@ async function handleMessage(event: SlackMessageEvent) {
       if (cmd.kind === "unknown" || !rows.length) {
         await reply(
           rows.length
-            ? "I can change the time (“5pm”, “4-6”), day (“move to Fri”), who’s doing it (“Ashley”), or “cancel” — or tap *Edit*."
+            ? "I can change the time (“5pm”, “4-6”), day (“move to Fri”), who’s doing it (“Ashley”), the name (“rename to …”), or “cancel” — or tap *Edit*."
             : "Those events have already been removed.",
         );
         return;
@@ -113,6 +113,7 @@ async function handleMessage(event: SlackMessageEvent) {
           continue;
         }
         const input = rowToInput(row);
+        if (cmd.title) input.title = cmd.title;
         if (shiftDays !== null) {
           input.day = format(addDays(parseISO(input.day), shiftDays), "yyyy-MM-dd");
         } else if (cmd.day) input.day = cmd.day;

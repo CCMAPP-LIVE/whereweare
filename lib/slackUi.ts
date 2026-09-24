@@ -89,7 +89,7 @@ export async function postConfirmation(opts: {
       elements: [
         {
           type: "mrkdwn",
-          text: "Reply in this thread to change it — e.g. “5pm”, “4-6”, “move to Fri”, “Ashley’s doing it”, “cancel”.",
+          text: "Reply in this thread to change it — e.g. “5pm”, “4-6”, “move to Fri”, “Ashley’s doing it”, “rename to …”, “cancel”.",
         },
       ],
     },
