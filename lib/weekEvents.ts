@@ -41,11 +41,13 @@ async function syncToLife(
     ]);
     const people = (peopleRes.data ?? []).filter((p) => p.display_name?.trim());
     // Nobody assigned = a family event (both adults), e.g. "Legoland (David & Ashley)".
-    const assigneeName =
-      helperRes.data?.name ??
-      (ev.assigneeUserId
-        ? (people.find((p) => p.id === ev.assigneeUserId)?.display_name ?? null)
-        : people.map((p) => p.display_name!.trim()).join(" & ") || null);
+    // School calendar days ("🏫 Half Term") aren't anyone's job — no "(who)".
+    const assigneeName = ev.title.startsWith("🏫")
+      ? null
+      : (helperRes.data?.name ??
+        (ev.assigneeUserId
+          ? (people.find((p) => p.id === ev.assigneeUserId)?.display_name ?? null)
+          : people.map((p) => p.display_name!.trim()).join(" & ") || null));
     const kidNames = (kidsRes.data ?? []).map((k) => k.name);
     const newGoogleEventId = await upsertWeekEventOnLifeCalendar({
       id,
@@ -59,10 +61,7 @@ async function syncToLife(
       googleEventId,
     });
     if (newGoogleEventId && newGoogleEventId !== googleEventId) {
-      await admin
-        .from("week_events")
-        .update({ google_event_id: newGoogleEventId })
-        .eq("id", id);
+      await admin.from("week_events").update({ google_event_id: newGoogleEventId }).eq("id", id);
     }
     return { lifeSynced: true };
   } catch (e) {
