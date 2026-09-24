@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
+import QuickAddHelp from "@/components/QuickAddHelp";
 
 /**
  * Floating assistant on every signed-in page. Type, speak, paste or share:
@@ -11,7 +12,14 @@ import { useRouter } from "next/navigation";
  * Same rules as the Slack bot (lib/quickAdd.ts + lib/quickAssistant.ts).
  */
 
-type Summary = { title: string; when: string; kids: string[]; who: string; count: number; notes: string | null };
+type Summary = {
+  title: string;
+  when: string;
+  kids: string[];
+  who: string;
+  count: number;
+  notes: string | null;
+};
 
 type Preview =
   | { ok: false; message: string }
@@ -60,7 +68,10 @@ function loadRecent(): string[] {
 }
 function saveRecent(text: string) {
   try {
-    const next = [text, ...loadRecent().filter((t) => t.toLowerCase() !== text.toLowerCase())].slice(0, 6);
+    const next = [
+      text,
+      ...loadRecent().filter((t) => t.toLowerCase() !== text.toLowerCase()),
+    ].slice(0, 6);
     localStorage.setItem(RECENT_KEY, JSON.stringify(next));
   } catch {
     /* private mode — recents are a nicety */
@@ -73,7 +84,10 @@ const DATEISH =
 export function eventSentence(text: string): string {
   const t = text.replace(/\s+\n/g, "\n").trim();
   if (t.length <= 140) return t.replace(/\s+/g, " ");
-  const parts = t.split(/\n+|(?<=[.!?])\s+/).map((p) => p.trim()).filter(Boolean);
+  const parts = t
+    .split(/\n+|(?<=[.!?])\s+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
   const hit = parts.find((p) => DATEISH.test(p));
   return (hit ?? parts[0] ?? t).replace(/\s+/g, " ").slice(0, 300);
 }
@@ -112,6 +126,7 @@ export default function QuickAddChat() {
   const [recent, setRecent] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const speechOk = useSyncExternalStore(
     () => () => {},
     () => !!getSpeech(),
@@ -210,7 +225,10 @@ export default function QuickAddChat() {
     if (!ready || !current || !current.ok) return;
     setMessages((m) => [...m, { role: "user", text }]);
     if (current.kind === "answer") {
-      setMessages((m) => [...m, { role: "answer", heading: current.heading, lines: current.lines }]);
+      setMessages((m) => [
+        ...m,
+        { role: "answer", heading: current.heading, lines: current.lines },
+      ]);
       reset();
       return;
     }
@@ -254,7 +272,9 @@ export default function QuickAddChat() {
       body: JSON.stringify(msg.undo),
     });
     if (res.ok) {
-      setMessages((m) => m.map((x, i) => (i === index && x.role === "done" ? { ...x, undone: true } : x)));
+      setMessages((m) =>
+        m.map((x, i) => (i === index && x.role === "done" ? { ...x, undone: true } : x)),
+      );
       router.refresh();
     }
   }
@@ -283,7 +303,10 @@ export default function QuickAddChat() {
       if (e.error === "not-allowed")
         setMessages((m) => [
           ...m,
-          { role: "bot", text: "Microphone access is blocked — allow it in settings, or use the mic on your keyboard." },
+          {
+            role: "bot",
+            text: "Microphone access is blocked — allow it in settings, or use the mic on your keyboard.",
+          },
         ]);
     };
     recRef.current = rec;
@@ -299,14 +322,19 @@ export default function QuickAddChat() {
         inputRef.current?.focus();
       }
     } catch {
-      setMessages((m) => [...m, { role: "bot", text: "Couldn't read the clipboard — long-press the box and choose Paste." }]);
+      setMessages((m) => [
+        ...m,
+        { role: "bot", text: "Couldn't read the clipboard — long-press the box and choose Paste." },
+      ]);
     }
   }
 
   // Fix-up chips for an add preview.
   const whoChips = [
     { key: "me", label: "Me" },
-    ...people.filter((p) => p.id !== currentUserId).map((p) => ({ key: `p:${p.id}`, label: p.name })),
+    ...people
+      .filter((p) => p.id !== currentUserId)
+      .map((p) => ({ key: `p:${p.id}`, label: p.name })),
     ...helpers.map((h) => ({ key: `h:${h.id}`, label: h.name })),
     { key: "shared", label: "Both" },
   ];
@@ -320,143 +348,199 @@ export default function QuickAddChat() {
           aria-label="Quick add or ask"
           className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-4 z-40 flex h-14 items-center gap-2 rounded-full bg-teal-600 pl-4 pr-5 font-medium text-white shadow-lg shadow-teal-900/20 transition hover:bg-teal-700 active:scale-95"
         >
-          <span aria-hidden className="text-2xl leading-none">＋</span>
+          <span aria-hidden className="text-2xl leading-none">
+            ＋
+          </span>
           <span className="text-sm">Add</span>
         </button>
       )}
 
       {open && (
-        <div className="fixed inset-0 z-40 flex items-end justify-end sm:p-4" role="dialog" aria-label="Quick add">
-          <div className="absolute inset-0 bg-black/30 sm:bg-transparent" onClick={() => setOpen(false)} />
+        <div
+          className="fixed inset-0 z-40 flex items-end justify-end sm:p-4"
+          role="dialog"
+          aria-label="Quick add"
+        >
+          <div
+            className="absolute inset-0 bg-black/30 sm:bg-transparent"
+            onClick={() => setOpen(false)}
+          />
           <div className="relative flex h-[min(88vh,680px)] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl ring-1 ring-black/5 dark:bg-neutral-900 dark:ring-white/10 sm:w-[420px] sm:rounded-2xl">
             <div className="flex items-center justify-between border-b border-black/5 px-4 py-3 dark:border-white/10">
               <div>
                 <div className="font-semibold">Quick add</div>
-                <div className="text-xs text-neutral-500">Add, change or ask — type, speak or paste</div>
-              </div>
-              <button
-                onClick={() => setOpen(false)}
-                aria-label="Close"
-                className="flex h-9 w-9 items-center justify-center rounded-lg text-neutral-500 hover:bg-black/5 dark:hover:bg-white/10"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div ref={logRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
-              <BotBubble>
-                Tell me what&apos;s on — <b>Percy swimming Thu 4-5</b>. You can also change things (
-                <b>move swimming to Friday</b>, <b>cancel Legoland</b>) or ask (<b>what&apos;s on tomorrow?</b>).
-              </BotBubble>
-
-              {messages.length === 0 && !text && (
-                <div className="space-y-2">
-                  {recent.length > 0 && (
-                    <ChipRow label="Recent" items={recent} onPick={(t) => setInput(t)} />
-                  )}
-                  <ChipRow label="Try" items={EXAMPLES} onPick={(t) => setInput(t)} />
+                <div className="text-xs text-neutral-500">
+                  Add, change or ask — type, speak or paste
                 </div>
-              )}
-
-              {messages.map((m, i) =>
-                m.role === "user" ? (
-                  <div key={i} className="flex justify-end">
-                    <div className="max-w-[85%] rounded-2xl rounded-br-md bg-teal-600 px-3 py-2 text-sm text-white">
-                      {m.text}
-                    </div>
-                  </div>
-                ) : m.role === "bot" ? (
-                  <BotBubble key={i}>{m.text}</BotBubble>
-                ) : m.role === "answer" ? (
-                  <BotBubble key={i}>
-                    <Answer heading={m.heading} lines={m.lines} />
-                  </BotBubble>
-                ) : (
-                  <BotBubble key={i}>
-                    <div className={m.undone ? "line-through opacity-50" : ""}>✅ {m.text}</div>
-                    {!m.lifeSynced && !m.undone && (
-                      <p className="mt-1 text-[11px] text-amber-600">Saved, but the Life calendar sync failed.</p>
-                    )}
-                    <div className="mt-1.5">
-                      {m.undone ? (
-                        <span className="text-xs text-neutral-500">↩️ Undone</span>
-                      ) : (
-                        <button
-                          onClick={() => undo(i)}
-                          className="rounded-lg px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
-                        >
-                          Undo
-                        </button>
-                      )}
-                    </div>
-                  </BotBubble>
-                ),
-              )}
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setShowHelp((v) => !v)}
+                  aria-label="How to use Quick add"
+                  title="How to use Quick add"
+                  className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold ${
+                    showHelp
+                      ? "bg-teal-600 text-white"
+                      : "text-teal-700 ring-1 ring-teal-600/30 hover:bg-teal-600/10 dark:text-teal-300"
+                  }`}
+                >
+                  ?
+                </button>
+                <button
+                  onClick={() => setOpen(false)}
+                  aria-label="Close"
+                  className="flex h-9 w-9 items-center justify-center rounded-lg text-neutral-500 hover:bg-black/5 dark:hover:bg-white/10"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
 
-            {shown && (
-              <div className="max-h-[45%] overflow-y-auto border-t border-black/5 bg-neutral-50 px-4 py-2.5 dark:border-white/10 dark:bg-neutral-800/60">
-                {!shown.ok ? (
-                  <p className="text-sm text-amber-700 dark:text-amber-400">{shown.message}</p>
-                ) : shown.kind === "add" ? (
-                  <>
-                    <Label>Will add{shown.summary.count > 1 ? ` ${shown.summary.count} entries` : ""}</Label>
-                    <SummaryCard s={shown.summary} />
-                    <div className="mt-2 flex flex-wrap items-center gap-1">
-                      <span className="mr-0.5 text-[10px] uppercase text-neutral-400">Who</span>
-                      {whoChips.map((c) => (
-                        <Chip
-                          key={c.key}
-                          active={shown.who === c.key}
-                          onClick={() => setOverrides((o) => ({ ...o, who: c.key }))}
-                        >
-                          {c.label}
-                        </Chip>
-                      ))}
+            {showHelp ? (
+              <QuickAddHelp
+                onBack={() => setShowHelp(false)}
+                onTry={(t) => {
+                  setInput(t);
+                  setShowHelp(false);
+                }}
+              />
+            ) : (
+              <>
+                <div ref={logRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+                  <BotBubble>
+                    Tell me what&apos;s on — <b>Percy swimming Thu 4-5</b>. You can also change
+                    things (<b>move swimming to Friday</b>, <b>cancel Legoland</b>) or ask (
+                    <b>what&apos;s on tomorrow?</b>). Tap <b>?</b> for all the rules.
+                  </BotBubble>
+
+                  {messages.length === 0 && !text && (
+                    <div className="space-y-2">
+                      {recent.length > 0 && (
+                        <ChipRow label="Recent" items={recent} onPick={(t) => setInput(t)} />
+                      )}
+                      <ChipRow label="Try" items={EXAMPLES} onPick={(t) => setInput(t)} />
                     </div>
-                    {kids.length > 0 && (
-                      <div className="mt-1 flex flex-wrap items-center gap-1">
-                        <span className="mr-0.5 text-[10px] uppercase text-neutral-400">Kids</span>
-                        {kids.map((k) => {
-                          const on = shown.kids.includes(k.id);
-                          return (
-                            <Chip
-                              key={k.id}
-                              active={on}
-                              tone="amber"
-                              onClick={() =>
-                                setOverrides((o) => ({
-                                  ...o,
-                                  kids: on ? shown.kids.filter((x) => x !== k.id) : [...shown.kids, k.id],
-                                }))
-                              }
+                  )}
+
+                  {messages.map((m, i) =>
+                    m.role === "user" ? (
+                      <div key={i} className="flex justify-end">
+                        <div className="max-w-[85%] rounded-2xl rounded-br-md bg-teal-600 px-3 py-2 text-sm text-white">
+                          {m.text}
+                        </div>
+                      </div>
+                    ) : m.role === "bot" ? (
+                      <BotBubble key={i}>{m.text}</BotBubble>
+                    ) : m.role === "answer" ? (
+                      <BotBubble key={i}>
+                        <Answer heading={m.heading} lines={m.lines} />
+                      </BotBubble>
+                    ) : (
+                      <BotBubble key={i}>
+                        <div className={m.undone ? "line-through opacity-50" : ""}>✅ {m.text}</div>
+                        {!m.lifeSynced && !m.undone && (
+                          <p className="mt-1 text-[11px] text-amber-600">
+                            Saved, but the Life calendar sync failed.
+                          </p>
+                        )}
+                        <div className="mt-1.5">
+                          {m.undone ? (
+                            <span className="text-xs text-neutral-500">↩️ Undone</span>
+                          ) : (
+                            <button
+                              onClick={() => undo(i)}
+                              className="rounded-lg px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
                             >
-                              {k.name}
+                              Undo
+                            </button>
+                          )}
+                        </div>
+                      </BotBubble>
+                    ),
+                  )}
+                </div>
+
+                {shown && (
+                  <div className="max-h-[45%] overflow-y-auto border-t border-black/5 bg-neutral-50 px-4 py-2.5 dark:border-white/10 dark:bg-neutral-800/60">
+                    {!shown.ok ? (
+                      <p className="text-sm text-amber-700 dark:text-amber-400">{shown.message}</p>
+                    ) : shown.kind === "add" ? (
+                      <>
+                        <Label>
+                          Will add{shown.summary.count > 1 ? ` ${shown.summary.count} entries` : ""}
+                        </Label>
+                        <SummaryCard s={shown.summary} />
+                        <div className="mt-2 flex flex-wrap items-center gap-1">
+                          <span className="mr-0.5 text-[10px] uppercase text-neutral-400">Who</span>
+                          {whoChips.map((c) => (
+                            <Chip
+                              key={c.key}
+                              active={shown.who === c.key}
+                              onClick={() => setOverrides((o) => ({ ...o, who: c.key }))}
+                            >
+                              {c.label}
                             </Chip>
-                          );
-                        })}
-                      </div>
+                          ))}
+                        </div>
+                        {kids.length > 0 && (
+                          <div className="mt-1 flex flex-wrap items-center gap-1">
+                            <span className="mr-0.5 text-[10px] uppercase text-neutral-400">
+                              Kids
+                            </span>
+                            {kids.map((k) => {
+                              const on = shown.kids.includes(k.id);
+                              return (
+                                <Chip
+                                  key={k.id}
+                                  active={on}
+                                  tone="amber"
+                                  onClick={() =>
+                                    setOverrides((o) => ({
+                                      ...o,
+                                      kids: on
+                                        ? shown.kids.filter((x) => x !== k.id)
+                                        : [...shown.kids, k.id],
+                                    }))
+                                  }
+                                >
+                                  {k.name}
+                                </Chip>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </>
+                    ) : shown.kind === "change" ? (
+                      <>
+                        <Label>
+                          {shown.action === "cancel" ? "Will remove" : "Will change"}
+                          {shown.count > 1 ? ` ${shown.count} entries` : ""}
+                        </Label>
+                        <div className="text-sm">
+                          <div className="font-semibold">{shown.title}</div>
+                          <div className="text-neutral-500 line-through decoration-neutral-400/60">
+                            {shown.before}
+                          </div>
+                          <div
+                            className={
+                              shown.action === "cancel"
+                                ? "text-red-600"
+                                : "text-teal-700 dark:text-teal-300"
+                            }
+                          >
+                            → {shown.after}
+                          </div>
+                          {shown.note && (
+                            <div className="mt-1 text-xs text-neutral-500">{shown.note}</div>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <Answer heading={shown.heading} lines={shown.lines} />
                     )}
-                  </>
-                ) : shown.kind === "change" ? (
-                  <>
-                    <Label>
-                      {shown.action === "cancel" ? "Will remove" : "Will change"}
-                      {shown.count > 1 ? ` ${shown.count} entries` : ""}
-                    </Label>
-                    <div className="text-sm">
-                      <div className="font-semibold">{shown.title}</div>
-                      <div className="text-neutral-500 line-through decoration-neutral-400/60">{shown.before}</div>
-                      <div className={shown.action === "cancel" ? "text-red-600" : "text-teal-700 dark:text-teal-300"}>
-                        → {shown.after}
-                      </div>
-                      {shown.note && <div className="mt-1 text-xs text-neutral-500">{shown.note}</div>}
-                    </div>
-                  </>
-                ) : (
-                  <Answer heading={shown.heading} lines={shown.lines} />
+                  </div>
                 )}
-              </div>
+              </>
             )}
 
             <div className="flex items-end gap-2 border-t border-black/5 px-3 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] dark:border-white/10 sm:pb-3">
@@ -494,7 +578,9 @@ export default function QuickAddChat() {
                 onClick={submit}
                 disabled={!ready}
                 className={`h-11 shrink-0 rounded-full px-4 text-sm font-medium text-white disabled:opacity-40 ${
-                  actionLabel === "Remove" ? "bg-red-600 hover:bg-red-700" : "bg-teal-600 hover:bg-teal-700"
+                  actionLabel === "Remove"
+                    ? "bg-red-600 hover:bg-red-700"
+                    : "bg-teal-600 hover:bg-teal-700"
                 }`}
               >
                 {busy ? "…" : actionLabel}
@@ -518,7 +604,11 @@ function BotBubble({ children }: { children: React.ReactNode }) {
 }
 
 function Label({ children }: { children: React.ReactNode }) {
-  return <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-neutral-400">{children}</div>;
+  return (
+    <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-neutral-400">
+      {children}
+    </div>
+  );
 }
 
 function Chip({
@@ -541,7 +631,9 @@ function Chip({
       type="button"
       onClick={onClick}
       className={`rounded-full border px-2.5 py-1 text-xs transition ${
-        active ? on : "border-black/10 text-neutral-600 hover:bg-black/5 dark:border-white/15 dark:text-neutral-300"
+        active
+          ? on
+          : "border-black/10 text-neutral-600 hover:bg-black/5 dark:border-white/15 dark:text-neutral-300"
       }`}
     >
       {children}
@@ -549,10 +641,20 @@ function Chip({
   );
 }
 
-function ChipRow({ label, items, onPick }: { label: string; items: string[]; onPick: (t: string) => void }) {
+function ChipRow({
+  label,
+  items,
+  onPick,
+}: {
+  label: string;
+  items: string[];
+  onPick: (t: string) => void;
+}) {
   return (
     <div>
-      <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-neutral-400">{label}</div>
+      <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-neutral-400">
+        {label}
+      </div>
       <div className="flex flex-wrap gap-1.5">
         {items.map((t) => (
           <button
@@ -618,7 +720,9 @@ function SummaryCard({ s }: { s: Summary }) {
 function Answer({ heading, lines }: { heading: string; lines: string[] }) {
   return (
     <div className="text-sm">
-      <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-neutral-400">{heading}</div>
+      <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-neutral-400">
+        {heading}
+      </div>
       {lines.map((l, i) =>
         l.startsWith("**") ? (
           <div key={i} className="mt-1.5 font-semibold first:mt-0">
