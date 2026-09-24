@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushToUser } from "@/lib/push/send";
 import { isLondonHour, londonToday } from "@/lib/time";
 import { loadDigestData, summaryFor } from "@/lib/digest";
+import { refreshConfiguredSchools } from "@/lib/termSync";
 
 /**
  * Evening-before summary, 19:00 Europe/London every day: "Tomorrow: you're on
@@ -25,9 +26,17 @@ export async function GET(request: Request) {
 
   const admin = createAdminClient();
   const today = londonToday();
+  const sunday = getISODay(parseISO(`${today}T12:00:00`)) === 7;
+
+  // Sundays: pick up new / moved / cancelled school dates before summarising.
+  let schools: Awaited<ReturnType<typeof refreshConfiguredSchools>> = [];
+  if (sunday) {
+    const { data: owner } = await admin.from("profiles").select("id").order("created_at").limit(1);
+    if (owner?.[0]) schools = await refreshConfiguredSchools(admin, owner[0].id).catch(() => []);
+  }
   const tomorrow = format(addDays(parseISO(`${today}T12:00:00`), 1), "yyyy-MM-dd");
   const data = await loadDigestData(admin, tomorrow, tomorrow);
-  const isSunday = getISODay(parseISO(`${today}T12:00:00`)) === 7;
+  const isSunday = sunday;
 
   const results = [];
   for (const p of data.people) {
@@ -50,5 +59,5 @@ export async function GET(request: Request) {
       });
     }
   }
-  return NextResponse.json({ ok: true, tomorrow, results });
+  return NextResponse.json({ ok: true, tomorrow, results, schools });
 }

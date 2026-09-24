@@ -3,11 +3,42 @@
 import { useState } from "react";
 
 /** Settings: import school holidays / INSET days from the school's calendar. */
-export default function TermDatesImport({ kids }: { kids: { id: string; name: string }[] }) {
+export default function TermDatesImport({
+  kids,
+  schools,
+}: {
+  kids: { id: string; name: string }[];
+  schools: { name: string; kids: string[] }[];
+}) {
   const [url, setUrl] = useState("");
   const [kidIds, setKidIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+
+  async function refresh() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/term-dates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh: true }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error ?? "Refresh failed");
+      setMsg(
+        (j.results as { name: string; added: number; removed: number; error?: string }[])
+          .map((r) =>
+            r.error ? `${r.name}: ${r.error}` : `${r.name}: ${r.added} added, ${r.removed} removed`,
+          )
+          .join(" · ") || "No schools set up yet.",
+      );
+    } catch (e) {
+      setMsg((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function run(body: { url?: string; ics?: string }) {
     setBusy(true);
@@ -34,6 +65,26 @@ export default function TermDatesImport({ kids }: { kids: { id: string; name: st
 
   return (
     <div className="space-y-2">
+      {schools.length > 0 && (
+        <div className="rounded-xl bg-sky-50 px-3 py-2 text-sm dark:bg-sky-950/30">
+          <div className="font-medium">Kept up to date automatically (every Sunday)</div>
+          <ul className="mt-0.5 text-neutral-600 dark:text-neutral-300">
+            {schools.map((s) => (
+              <li key={s.name}>
+                🏫 {s.name} — {s.kids.join(" & ")}
+              </li>
+            ))}
+          </ul>
+          <button
+            onClick={refresh}
+            disabled={busy}
+            className="mt-2 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+          >
+            {busy ? "Refreshing…" : "Refresh now"}
+          </button>
+        </div>
+      )}
+      <div className="text-xs text-neutral-500">Add another school:</div>
       <div className="flex flex-wrap items-center gap-1.5 text-sm">
         <span className="text-xs text-neutral-500">Which school is it for?</span>
         {kids.map((k) => {

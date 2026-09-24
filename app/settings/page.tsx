@@ -9,6 +9,7 @@ import CalendarLabelEditor from "@/components/CalendarLabelEditor";
 import EnablePush from "@/components/EnablePush";
 import LifeResyncButton from "@/components/LifeResyncButton";
 import TermDatesImport from "@/components/TermDatesImport";
+import { configuredSchools } from "@/lib/termSync";
 
 export const dynamic = "force-dynamic";
 
@@ -118,7 +119,10 @@ export default async function SettingsPage() {
           title="School term dates"
           description="Pick which child the school is for, then paste its calendar link (often “Subscribe” / “iCal” on the school website) to add holidays and INSET days. Import each school separately. Run again any time to pick up new dates."
         >
-          <TermDatesImport kids={termKids ?? []} />
+          <TermDatesImport
+            kids={termKids ?? []}
+            schools={configuredSchools().map((c) => ({ name: c.name, kids: c.kids }))}
+          />
         </Section>
 
         <Section
