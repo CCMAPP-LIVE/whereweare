@@ -16,17 +16,13 @@ import {
 import { APP_TIMEZONE } from "@/lib/constants";
 import type { NormalizedEvent, Slot, Status } from "@/lib/types";
 import NavBar from "@/components/NavBar";
-import CalendarView, {
-  type EventLite,
-  type SchoolDay,
-} from "@/components/CalendarView";
+import CalendarView, { type EventLite, type SchoolDay } from "@/components/CalendarView";
 
 export const dynamic = "force-dynamic";
 
 function timeOf(ev: NormalizedEvent): string {
   if (ev.allDay) return "All day";
-  if (ev.provider === "google")
-    return formatInTimeZone(new Date(ev.start), APP_TIMEZONE, "HH:mm");
+  if (ev.provider === "google") return formatInTimeZone(new Date(ev.start), APP_TIMEZONE, "HH:mm");
   return ev.start.slice(11, 16); // Microsoft times are already Europe/London
 }
 
@@ -163,7 +159,7 @@ export default async function Home({
   > = {};
   for (const p of people) availability[p.id] = {};
   for (const a of avail ?? []) {
-    (availability[a.user_id] ??= {});
+    availability[a.user_id] ??= {};
     (availability[a.user_id][a.day] ??= {})[a.slot] = {
       status: a.status,
       note: a.note,
@@ -172,10 +168,7 @@ export default async function Home({
 
   // Out/back times for the visible range.
 
-  const times: Record<
-    string,
-    Record<string, { leave: string | null; return: string | null }>
-  > = {};
+  const times: Record<string, Record<string, { leave: string | null; return: string | null }>> = {};
   for (const p of people) times[p.id] = {};
   for (const t of dtimes ?? []) {
     (times[t.user_id] ??= {})[t.day] = {
@@ -230,11 +223,18 @@ export default async function Home({
     day: string,
     ev: EventLite,
   ) => {
-    (map[who] ??= {});
+    map[who] ??= {};
     (map[who][day] ??= []).push(ev);
     map[who][day].sort((a, b) => a.time.localeCompare(b.time));
   };
+  const termByDay: Record<string, string[]> = {};
   for (const we of weekEvents ?? []) {
+    // School calendar imports ("🏫 Half Term") show as a badge on the day, not a row entry.
+    if (we.title.startsWith("🏫")) {
+      const label = we.title.replace(/^🏫\s*/, "");
+      if (!(termByDay[we.day] ??= []).includes(label)) termByDay[we.day].push(label);
+      continue;
+    }
     const lite: EventLite = {
       id: `we:${we.id}`,
       title: we.title,
@@ -244,7 +244,8 @@ export default async function Home({
       provider: "google",
     };
     const taggedKids: string[] = we.kid_ids ?? [];
-    for (const kidId of taggedKids) addTo(kidEvents, kidId, we.day, { ...lite, id: `${lite.id}:${kidId}` });
+    for (const kidId of taggedKids)
+      addTo(kidEvents, kidId, we.day, { ...lite, id: `${lite.id}:${kidId}` });
 
     const adults: string[] = we.assignee_user_id
       ? [we.assignee_user_id]
@@ -254,7 +255,8 @@ export default async function Home({
           : [we.user_id]
         : people.map((p) => p.id); // shared / family: both adults
     for (const adultId of adults) {
-      if (events[adultId]) addTo(events, adultId, we.day, { ...lite, id: `${lite.id}:u:${adultId}` });
+      if (events[adultId])
+        addTo(events, adultId, we.day, { ...lite, id: `${lite.id}:u:${adultId}` });
     }
   }
 
@@ -281,7 +283,7 @@ export default async function Home({
     // Also drop this run onto the kid's own calendar row, tagged with who's
     // doing it — so each child's row shows their school runs alongside their
     // activities. (The prominent band below still gives the at-a-glance view.)
-    (kidEvents[se.kid_id] ??= {});
+    kidEvents[se.kid_id] ??= {};
     (kidEvents[se.kid_id][se.day] ??= []).push({
       id: `se:${se.kid_id}:${se.day}:${se.kind}`,
       title: se.kind === "drop" ? "Drop-off" : "Pick-up",
@@ -339,6 +341,7 @@ export default async function Home({
         unreadByDay={unreadByDay}
         commentedByDay={commentedByDay}
         schoolByDay={schoolByDay}
+        termByDay={termByDay}
       />
     </>
   );

@@ -50,6 +50,8 @@ type Props = {
   unreadByDay: Record<string, number>;
   commentedByDay: Record<string, number>;
   schoolByDay: Record<string, SchoolDay>;
+  /** School calendar labels per day, e.g. "Half Term" (from 🏫 imports). */
+  termByDay: Record<string, string[]>;
 };
 
 const VIEWS: { value: CalView; label: string }[] = [
@@ -75,6 +77,7 @@ export default function CalendarView({
   unreadByDay,
   commentedByDay,
   schoolByDay,
+  termByDay,
 }: Props) {
   const [avail, setAvail] = useState<AvailabilityMap>(availability);
   const [dayTimes, setDayTimes] = useState<TimesMap>(times);
@@ -194,16 +197,14 @@ export default function CalendarView({
       <Legend />
       {!calendarsConfigured && (
         <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-          Calendar sync isn’t configured yet — showing availability only. Connect
-          calendars in Settings once setup is complete.
+          Calendar sync isn’t configured yet — showing availability only. Connect calendars in
+          Settings once setup is complete.
         </p>
       )}
 
       <div
         className={
-          pending
-            ? "pointer-events-none opacity-50 transition-opacity"
-            : "transition-opacity"
+          pending ? "pointer-events-none opacity-50 transition-opacity" : "transition-opacity"
         }
       >
         {view === "month" ? (
@@ -217,6 +218,7 @@ export default function CalendarView({
             kids={kids}
             kidEvents={kidEvents}
             schoolByDay={schoolByDay}
+            termByDay={termByDay}
             commentedByDay={commentedByDay}
             onPickDay={(day) => navigate("day", day)}
           />
@@ -235,6 +237,7 @@ export default function CalendarView({
                 kids={kids}
                 kidEvents={kidEvents}
                 school={schoolByDay[day]}
+                term={termByDay[day] ?? []}
                 commentCount={commentedByDay[day] ?? 0}
                 unreadCount={unread[day] ?? 0}
                 onEdit={() => setEditing(day)}
@@ -250,9 +253,7 @@ export default function CalendarView({
         <DayEditor
           day={editing}
           initialSlots={avail[currentUserId]?.[editing] ?? {}}
-          initialTimes={
-            dayTimes[currentUserId]?.[editing] ?? { leave: null, return: null }
-          }
+          initialTimes={dayTimes[currentUserId]?.[editing] ?? { leave: null, return: null }}
           onClose={() => setEditing(null)}
           onSave={(slots, t) => saveDay(editing, slots, t)}
         />
@@ -270,7 +271,13 @@ export default function CalendarView({
 
       {addingEvent && (
         <NewEventModal
-          defaultDate={view === "day" ? anchor : today >= days[0] && today <= days[days.length - 1] ? today : days[0]}
+          defaultDate={
+            view === "day"
+              ? anchor
+              : today >= days[0] && today <= days[days.length - 1]
+                ? today
+                : days[0]
+          }
           people={people}
           kids={kids}
           helpers={helpers}
@@ -393,10 +400,7 @@ function Legend() {
     <div className="mb-3 hidden flex-wrap gap-2 px-1 text-xs text-neutral-500 sm:flex">
       {STATUSES.map((s) => (
         <span key={s.value} className="inline-flex items-center gap-1">
-          <span
-            className="inline-block h-2.5 w-2.5 rounded-full"
-            style={{ background: s.color }}
-          />
+          <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: s.color }} />
           {s.label}
         </span>
       ))}
@@ -426,6 +430,7 @@ function DayCard({
   kids,
   kidEvents,
   school,
+  term,
   commentCount,
   unreadCount,
   onEdit,
@@ -442,6 +447,7 @@ function DayCard({
   kids: { id: string; name: string }[];
   kidEvents: EventsMap;
   school?: SchoolDay;
+  term: string[];
   commentCount: number;
   unreadCount: number;
   onEdit: () => void;
@@ -466,6 +472,14 @@ function DayCard({
               Today
             </span>
           )}
+          {term.map((t) => (
+            <span
+              key={t}
+              className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-medium text-sky-800 dark:bg-sky-950/50 dark:text-sky-200"
+            >
+              🏫 {t}
+            </span>
+          ))}
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -476,9 +490,7 @@ function DayCard({
                 : "Comment on this day"
             }
             className={`relative flex items-center gap-1 rounded-lg px-2 py-1 text-xs hover:bg-teal-50 dark:hover:bg-teal-950/30 ${
-              commentCount > 0
-                ? "text-teal-600"
-                : "text-neutral-300 dark:text-neutral-600"
+              commentCount > 0 ? "text-teal-600" : "text-neutral-300 dark:text-neutral-600"
             }`}
           >
             <span aria-hidden>💬</span>
@@ -571,15 +583,7 @@ function DayCard({
 }
 
 /** Prominent, glanceable "who's doing this run" pill. */
-function SchoolPill({
-  icon,
-  label,
-  run,
-}: {
-  icon: string;
-  label: string;
-  run: SchoolRun;
-}) {
+function SchoolPill({ icon, label, run }: { icon: string; label: string; run: SchoolRun }) {
   const who =
     run.groups.length === 1
       ? run.groups[0].who
@@ -589,9 +593,7 @@ function SchoolPill({
       <span aria-hidden>{icon}</span>
       <span className="font-medium text-amber-700 dark:text-amber-300">{label}</span>
       {run.time && (
-        <span className="tabular-nums text-amber-700/70 dark:text-amber-300/70">
-          {run.time}
-        </span>
+        <span className="tabular-nums text-amber-700/70 dark:text-amber-300/70">{run.time}</span>
       )}
       <span className="font-semibold text-neutral-800 dark:text-neutral-100">{who}</span>
     </span>
@@ -745,6 +747,7 @@ function MonthGrid({
   kids,
   kidEvents,
   schoolByDay,
+  termByDay,
   commentedByDay,
   onPickDay,
 }: {
@@ -757,6 +760,7 @@ function MonthGrid({
   kids: { id: string; name: string }[];
   kidEvents: EventsMap;
   schoolByDay: Record<string, SchoolDay>;
+  termByDay: Record<string, string[]>;
   commentedByDay: Record<string, number>;
   onPickDay: (day: string) => void;
 }) {
@@ -796,15 +800,19 @@ function MonthGrid({
                   </span>
                 )}
               </div>
+              {(termByDay[day] ?? []).length > 0 && (
+                <span
+                  className="truncate rounded bg-sky-100 px-1 text-[9px] text-sky-800 dark:bg-sky-950/50 dark:text-sky-200"
+                  title={termByDay[day].join(", ")}
+                >
+                  🏫 {termByDay[day][0]}
+                </span>
+              )}
               <div className="flex flex-col gap-0.5">
                 {people.map((p) => {
                   const hasEvents = (events[p.id]?.[day]?.length ?? 0) > 0;
                   return (
-                    <div
-                      key={p.id}
-                      className="flex items-center gap-1"
-                      title={p.name}
-                    >
+                    <div key={p.id} className="flex items-center gap-1" title={p.name}>
                       <span className="w-2.5 shrink-0 text-[8px] font-medium uppercase text-neutral-400">
                         {p.name.slice(0, 1)}
                       </span>
@@ -816,17 +824,13 @@ function MonthGrid({
                   );
                 })}
                 {(schoolByDay[day]?.drop || schoolByDay[day]?.pickup) && (
-                  <div
-                    className="flex items-center gap-1"
-                    title="School run"
-                  >
+                  <div className="flex items-center gap-1" title="School run">
                     <span className="text-[8px]" aria-hidden>
                       🎒
                     </span>
                     <span className="truncate text-[8px] font-medium text-amber-600">
                       {schoolByDay[day]?.drop?.groups[0]?.who}
-                      {schoolByDay[day]?.pickup &&
-                        ` / ${schoolByDay[day]?.pickup?.groups[0]?.who}`}
+                      {schoolByDay[day]?.pickup && ` / ${schoolByDay[day]?.pickup?.groups[0]?.who}`}
                     </span>
                   </div>
                 )}
@@ -915,9 +919,7 @@ function DayEditor({
   }
   const allDayStatus: Status | null | undefined = (() => {
     const first = draft[SLOTS[0].value]?.status ?? null;
-    return SLOTS.every((s) => (draft[s.value]?.status ?? null) === first)
-      ? first
-      : undefined;
+    return SLOTS.every((s) => (draft[s.value]?.status ?? null) === first) ? first : undefined;
   })();
 
   return (
@@ -940,9 +942,7 @@ function DayEditor({
 
         <div className="space-y-4">
           <div>
-            <div className="mb-1 text-xs font-medium uppercase text-neutral-400">
-              All day
-            </div>
+            <div className="mb-1 text-xs font-medium uppercase text-neutral-400">All day</div>
             <div className="flex flex-wrap gap-1.5">
               <OptionButton
                 active={allDayStatus === null}
@@ -966,9 +966,7 @@ function DayEditor({
             const cur = draft[s.value]?.status ?? null;
             return (
               <div key={s.value}>
-                <div className="mb-1 text-xs font-medium uppercase text-neutral-400">
-                  {s.label}
-                </div>
+                <div className="mb-1 text-xs font-medium uppercase text-neutral-400">{s.label}</div>
                 <div className="flex flex-wrap gap-1.5">
                   <OptionButton
                     active={cur === null}
@@ -1024,9 +1022,7 @@ function DayEditor({
         </div>
 
         <button
-          onClick={() =>
-            onSave(draft, { leave: leave || null, return: back || null })
-          }
+          onClick={() => onSave(draft, { leave: leave || null, return: back || null })}
           className="mt-5 w-full rounded-xl bg-teal-600 px-4 py-2.5 font-medium text-white hover:bg-teal-700"
         >
           Save

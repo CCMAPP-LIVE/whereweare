@@ -99,8 +99,24 @@ export function findIssues(d: DigestData, days: string[]): Issue[] {
   const daySet = new Set(days);
   const slotLabel = (s: Slot) => SLOTS.find((x) => x.value === s)!.label;
 
+  // Imported school calendar days off ("🏫 Half Term", "🏫 INSET day").
+  const noSchool = new Map<string, string>();
+  for (const e of d.events)
+    if (
+      /^🏫/.test(e.title) &&
+      /holiday|half.?term|inset|training|closed|no school|bank/i.test(e.title)
+    )
+      noSchool.set(e.day, e.title.replace(/^🏫\s*/, ""));
+
   for (const s of d.school) {
     if (!daySet.has(s.day)) continue;
+    if (noSchool.has(s.day)) {
+      issues.push({
+        day: s.day,
+        text: `${kid.get(s.kid_id) ?? ""}'s ${s.kind === "drop" ? "drop-off" : "pickup"} is set but it's ${noSchool.get(s.day)}`,
+      });
+      continue;
+    }
     const run = `${kid.get(s.kid_id) ?? ""}'s ${s.kind === "drop" ? "drop-off" : "pickup"} ${hhmm(s.time)}`;
     if (!s.assignee_user_id && !s.helper_id) {
       issues.push({ day: s.day, text: `Nobody is down for ${run}` });
