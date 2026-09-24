@@ -65,3 +65,16 @@ button,
 [role="button"] {
   -webkit-tap-highlight-color: transparent;
 }
+
+/* Printable week sheet (/print): A4, black on white, no app chrome. */
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+}

@@ -14,6 +14,7 @@ const LINKS = [
   { href: "/plan", label: "Plan" },
   { href: "/school", label: "School" },
   { href: "/birthdays", label: "🎂 Birthdays" },
+  { href: "/print", label: "🖨 Print" },
   { href: "/users", label: "People" },
   { href: "/settings", label: "Settings" },
 ];
@@ -24,7 +25,7 @@ export default function NavBar() {
 
   return (
     <>
-    <header className="nav-safe sticky top-0 z-20 border-b border-black/10 bg-white/80 backdrop-blur dark:border-white/10 dark:bg-neutral-900/80">
+    <header className="nav-safe print:hidden sticky top-0 z-20 border-b border-black/10 bg-white/80 backdrop-blur dark:border-white/10 dark:bg-neutral-900/80">
       <div className="flex items-center gap-2 px-3 py-3 sm:px-4">
         <Link href="/" aria-label={APP_NAME} className="flex shrink-0 items-center gap-2 font-semibold">
           <span aria-hidden className="text-lg leading-none">
@@ -115,7 +116,9 @@ export default function NavBar() {
       )}
     </header>
     {/* Outside the header: its backdrop-blur would trap position:fixed children. */}
-    <QuickAddChat />
+    <div className="print:hidden">
+      <QuickAddChat />
+    </div>
     <RefreshOnReturn />
     </>
   );

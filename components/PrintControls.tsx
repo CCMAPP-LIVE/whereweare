@@ -1,0 +1,125 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+
+type Person = { id: string; name: string };
+
+const INCLUDES: { key: string; label: string }[] = [
+  { key: "school", label: "School runs" },
+  { key: "events", label: "Plans" },
+  { key: "where", label: "Where we are" },
+  { key: "calendars", label: "Work / other calendars" },
+];
+
+/** Options for the printable week sheet — hidden when printing. */
+export default function PrintControls({
+  week,
+  thisWeek,
+  nextWeek,
+  who,
+  include,
+  people,
+  kids,
+}: {
+  week: string;
+  thisWeek: string;
+  nextWeek: string;
+  who: string;
+  include: string[];
+  people: Person[];
+  kids: Person[];
+}) {
+  const router = useRouter();
+
+  function go(next: { week?: string; who?: string; include?: string[] }) {
+    const q = new URLSearchParams({
+      week: next.week ?? week,
+      who: next.who ?? who,
+      include: (next.include ?? include).join(","),
+    });
+    router.replace(`/print?${q}`);
+  }
+
+  const chip = (active: boolean) =>
+    `rounded-full border px-3 py-1.5 text-sm transition ${
+      active
+        ? "border-teal-600 bg-teal-600 text-white"
+        : "border-black/10 hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10"
+    }`;
+
+  const whoOptions = [
+    { key: "all", label: "Everyone" },
+    ...people.map((p) => ({ key: `p:${p.id}`, label: p.name })),
+    ...kids.map((k) => ({ key: `k:${k.id}`, label: k.name })),
+  ];
+
+  return (
+    <div className="mb-4 space-y-3 print:hidden">
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-lg font-semibold">Print a week</h1>
+        <button
+          onClick={() => window.print()}
+          className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700"
+        >
+          🖨 Print / Save PDF
+        </button>
+      </div>
+
+      <div>
+        <div className="mb-1 text-xs font-medium uppercase text-neutral-400">Week</div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button className={chip(week === thisWeek)} onClick={() => go({ week: thisWeek })}>
+            This week
+          </button>
+          <button className={chip(week === nextWeek)} onClick={() => go({ week: nextWeek })}>
+            Next week
+          </button>
+          <input
+            type="date"
+            value={week}
+            onChange={(e) => e.target.value && go({ week: e.target.value })}
+            className="rounded-full border border-black/10 bg-transparent px-3 py-1 text-sm dark:border-white/15"
+            aria-label="Week starting"
+          />
+        </div>
+      </div>
+
+      <div>
+        <div className="mb-1 text-xs font-medium uppercase text-neutral-400">Who</div>
+        <div className="flex flex-wrap gap-1.5">
+          {whoOptions.map((o) => (
+            <button key={o.key} className={chip(who === o.key)} onClick={() => go({ who: o.key })}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <div className="mb-1 text-xs font-medium uppercase text-neutral-400">Include</div>
+        <div className="flex flex-wrap gap-1.5">
+          {INCLUDES.map((o) => {
+            const on = include.includes(o.key);
+            return (
+              <button
+                key={o.key}
+                className={chip(on)}
+                onClick={() =>
+                  go({ include: on ? include.filter((k) => k !== o.key) : [...include, o.key] })
+                }
+              >
+                {on ? "✓ " : ""}
+                {o.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <p className="text-xs text-neutral-500">
+        iPhone: Print → choose your printer (AirPrint). To save a PDF, pinch outwards on the preview
+        and Share → Save to Files.
+      </p>
+    </div>
+  );
+}
