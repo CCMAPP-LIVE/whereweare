@@ -129,6 +129,23 @@ export default function QuickAddHelp({
         </a>
       </p>
 
+      <div className="mt-3 rounded-xl bg-teal-600/10 px-3 py-2.5 text-[13px] text-teal-900 dark:text-teal-100">
+        <div className="font-semibold">Top tips</div>
+        <ul className="mt-1 space-y-0.5">
+          <li>
+            • <b>Always say a day</b> — Thu, tomorrow, 14 Oct…
+          </li>
+          <li>
+            • <b>Say am or pm</b> for anything from 7 to 11 (“Beavers Mon 7.30pm”). 12–6 is always
+            afternoon.
+          </li>
+          <li>
+            • <b>Check the preview</b> before tapping Add — tap the Who / Kids / am-pm chips to fix
+            it.
+          </li>
+        </ul>
+      </div>
+
       {SECTIONS.map((s) => (
         <section key={s.title} className="mt-4">
           <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-teal-700 dark:text-teal-300">
