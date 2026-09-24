@@ -23,6 +23,35 @@ function bareHourTo24(h: number): number {
 /** When only a start time is given, the event lasts this long. */
 const DEFAULT_DURATION_MIN = 60;
 
+/** "Every Tuesday" with no end ("for 6 weeks", "until 18 Dec") runs this many weeks. */
+const REPEAT_DEFAULT_WEEKS = 8;
+/** Hard cap on how many events one message can create. */
+const REPEAT_MAX_EVENTS = 40; // also keeps the Undo button under Slack's 2000-char limit
+
+/** Spoken times → digits. "half 4" is the British 4:30. */
+function normaliseSpokenTimes(text: string): string {
+  return text
+    .replace(/\b(?:at\s+)?(noon|midday)\b/gi, " 12:00 ")
+    .replace(/\bhalf\s+(?:past\s+)?(\d{1,2})\b/gi, " $1:30 ")
+    .replace(/\bquarter\s+past\s+(\d{1,2})\b/gi, " $1:15 ")
+    .replace(/\bquarter\s+to\s+(\d{1,2})\b/gi, (_, h) => {
+      const n = Number(h);
+      return ` ${n === 1 ? 12 : n - 1}:45 `;
+    });
+}
+
+/**
+ * Time-of-day words set am/pm for bare hours ("tonight at 7" = 19:00).
+ * "this morning/afternoon/evening" and "tonight" also mean today.
+ */
+const DAY_PARTS: { pattern: RegExp; mer: "am" | "pm"; today: boolean }[] = [
+  { pattern: /\bthis\s+morning\b/i, mer: "am", today: true },
+  { pattern: /\bthis\s+(?:afternoon|evening)\b/i, mer: "pm", today: true },
+  { pattern: /\bin\s+the\s+morning\b/i, mer: "am", today: false },
+  { pattern: /\bin\s+the\s+(?:afternoon|evening)\b/i, mer: "pm", today: false },
+  { pattern: /\btonight\b/i, mer: "pm", today: true },
+];
+
 /** Keywords that become a standard title (so they line up with /school). */
 const TITLE_KEYWORDS: { pattern: RegExp; title: string }[] = [
   { pattern: /\b(drop[\s-]?offs?|drops?)\b/i, title: "Drop-off" },
@@ -57,7 +86,7 @@ export type ParsedEvent = {
 };
 
 export type ParseResult =
-  | { ok: true; events: ParsedEvent[] }
+  | { ok: true; events: ParsedEvent[]; seriesNote: string | null }
   | { ok: false; message: string };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -101,7 +130,7 @@ const tok = (h?: string, m?: string, mer?: string): TimeToken => ({
  * A bare number only counts as a time when it isn't part of a date
  * ("14 Oct", "4/10", "3rd").
  */
-function extractTimes(text: string): {
+function extractTimes(text: string, dayPart: "am" | "pm" | null = null): {
   rest: string;
   start: string | null;
   end: string | null;
@@ -119,8 +148,8 @@ function extractTimes(text: string): {
     const a = tok(r[1], r[2], r[3]);
     const b = tok(r[4], r[5], r[6]);
     // "2-4pm": the end's am/pm applies to the start too.
-    const startMin = resolveTime(a, a.mer ?? b.mer);
-    let endMin = resolveTime(b, b.mer);
+    const startMin = resolveTime(a, a.mer ?? b.mer ?? dayPart);
+    let endMin = resolveTime(b, b.mer ?? dayPart);
     if (endMin <= startMin && !b.mer) endMin += 12 * 60;
     return {
       rest: cut(text, r.index, r[0].length),
@@ -140,7 +169,7 @@ function extractTimes(text: string): {
     if (!explicit && (t.h < 1 || t.h > 12)) continue;
     // A bare number straight after a month ("Oct 3") is a date, not a time.
     if (!explicit && afterMonth.test(text.slice(0, s.index))) continue;
-    return { rest: cut(text, s.index, s[0].length), start: toHHmm(resolveTime(t, null)), end: null };
+    return { rest: cut(text, s.index, s[0].length), start: toHHmm(resolveTime(t, dayPart)), end: null };
   }
   return { rest: text, start: null, end: null };
 }
@@ -155,47 +184,160 @@ const WEEKDAYS: [RegExp, number][] = [
   [/sun(?:day)?/, 7],
 ];
 
+const NUMBER_WORDS: Record<string, number> = {
+  a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6,
+  seven: 7, eight: 8, nine: 9, ten: 10, twelve: 12,
+};
+const num = (s: string) => NUMBER_WORDS[s.toLowerCase()] ?? Number(s);
+const NUM = String.raw`(\d{1,2}|a|an|one|two|three|four|five|six|seven|eight|nine|ten|twelve)`;
+
+type Repeat = { interval: number; weeks: number | null; until: string | null; on: boolean };
+
 /**
- * Pull out day(s). Handles today/tomorrow, weekdays (incl. "Thu and Fri",
- * "next Tues", "Friday week"), then explicit dates via chrono ("14 Oct",
- * "4/10", "Sat 3rd"). A bare weekday is the next occurrence, today included.
+ * Relative-date and repeat phrases. Runs BEFORE time extraction so numbers
+ * like "in 2 weeks" / "for 6 weeks" aren't mistaken for times.
  */
-function extractDays(text: string, today: string): { rest: string; days: string[] } {
+function extractRelative(text: string, today: string) {
   const base = parseISO(`${today}T12:00:00`);
   const days: string[] = [];
+  const repeat: Repeat = { interval: 1, weeks: null, until: null, on: false };
   let rest = text;
+  let m: RegExpExecArray | null;
 
-  const rel = /\b(today|tonight|tomorrow|tmrw|tmr)\b/i.exec(rest);
+  // "in 3 days", "in two weeks", "in a week's time"
+  if ((m = new RegExp(String.raw`\bin\s+${NUM}\s+(day|week)s?(?:'?s?\s+time)?\b`, "i").exec(rest))) {
+    days.push(format(addDays(base, num(m[1]) * (m[2].toLowerCase() === "week" ? 7 : 1)), "yyyy-MM-dd"));
+    rest = cut(rest, m.index, m[0].length);
+  }
+  // "a week today", "a week tomorrow"
+  if ((m = /\ba\s+week\s+(today|tomorrow)\b/i.exec(rest))) {
+    days.push(format(addDays(base, m[1].toLowerCase() === "today" ? 7 : 8), "yyyy-MM-dd"));
+    rest = cut(rest, m.index, m[0].length);
+  }
+  // Repeats: "every other", "fortnightly", "every", "weekly"
+  if ((m = /\b(every\s+other|every\s+second|fortnightly|biweekly)(\s+weeks?)?\b/i.exec(rest))) {
+    repeat.on = true;
+    repeat.interval = 2;
+    rest = cut(rest, m.index, m[0].length);
+  } else if ((m = /\b(every|weekly|each)(\s+weeks?)?\b/i.exec(rest))) {
+    repeat.on = true;
+    rest = cut(rest, m.index, m[0].length);
+  }
+  // "for 6 weeks"
+  if ((m = new RegExp(String.raw`\bfor\s+(?:the\s+next\s+)?${NUM}\s+weeks?\b`, "i").exec(rest))) {
+    repeat.weeks = num(m[1]);
+    rest = cut(rest, m.index, m[0].length);
+  }
+  // "until 18 Dec", "till Christmas", "until end of term" (dates only)
+  if ((m = /\b(?:until|till|til|up\s+to)\s+(christmas|xmas|[^,.;]*?\d{1,2}(?:st|nd|rd|th)?(?:\s*[/\s]\s*(?:\d{1,2}|[a-z]{3,9}))?)(?=\s|$|[,.;])/i.exec(rest))) {
+    const phrase = /^(christmas|xmas)$/i.test(m[1].trim()) ? "25 Dec" : m[1];
+    const d = chrono.en.GB.parseDate(phrase, base, { forwardDate: true });
+    if (d) {
+      repeat.until = format(d, "yyyy-MM-dd");
+      repeat.on = true;
+      rest = cut(rest, m.index, m[0].length);
+    }
+  }
+  return { rest, days, repeat };
+}
+
+/**
+ * Pull out day(s). Handles today/tomorrow, weekdays (incl. "Thu and Fri",
+ * "next Tues", "Friday week", "Saturday after next", "Tuesdays" = repeating),
+ * then explicit dates via chrono ("14 Oct", "4/10", "Sat 3rd"). A bare
+ * weekday is the next occurrence, today included.
+ */
+function extractDays(
+  text: string,
+  today: string,
+  repeat: Repeat,
+): { rest: string; days: string[]; seriesNote: string | null } {
+  const base = parseISO(`${today}T12:00:00`);
+  const firsts: string[] = [];
+  let rest = text;
+  let recurring = repeat.on;
+
+  const rel = /\b(today|tomorrow|tmrw|tmr)\b/i.exec(rest);
   if (rel) {
-    const isToday = /^(today|tonight)$/i.test(rel[1]);
-    days.push(format(addDays(base, isToday ? 0 : 1), "yyyy-MM-dd"));
+    firsts.push(format(addDays(base, /^today$/i.test(rel[1]) ? 0 : 1), "yyyy-MM-dd"));
     rest = cut(rest, rel.index, rel[0].length);
   }
 
   for (const [pattern, iso] of WEEKDAYS) {
-    const re = new RegExp(String.raw`\b(next\s+|this\s+)?${pattern.source}\b(\s+week)?`, "i");
+    const re = new RegExp(
+      String.raw`\b(?:the\s+)?(next\s+|this\s+)?(${pattern.source})(s)?\b(\s+after\s+next|\s+week)?`,
+      "i",
+    );
     const m = re.exec(rest);
     if (!m) continue;
+    // "Tuesdays" (full name + s) means every Tuesday; "Tues" is just an abbreviation.
+    if (m[3] && m[2].length > 4) recurring = true;
     let offset = (iso - getISODay(base) + 7) % 7; // 0 = today
     if (m[1]?.toLowerCase().startsWith("next")) {
       // "next Tues" = the one in next week (Mon–Sun), never this week.
-      const daysToNextMonday = 8 - getISODay(base);
-      offset = daysToNextMonday + (iso - 1);
+      offset = 8 - getISODay(base) + (iso - 1);
     }
-    if (m[2]) offset += 7; // "Friday week"
-    days.push(format(addDays(base, offset), "yyyy-MM-dd"));
+    if (m[4] && /after\s+next/i.test(m[4])) {
+      // "Saturday after next" = skip the coming one.
+      offset = (offset === 0 ? 7 : offset) + 7;
+    } else if (m[4]) {
+      offset += 7; // "Friday week"
+    }
+    firsts.push(format(addDays(base, offset), "yyyy-MM-dd"));
     rest = cut(rest, m.index, m[0].length);
   }
 
-  if (days.length === 0) {
+  if (firsts.length === 0) {
     const results = chrono.en.GB.parse(rest, base, { forwardDate: true });
     for (const res of results) {
-      days.push(format(res.start.date(), "yyyy-MM-dd"));
+      firsts.push(format(res.start.date(), "yyyy-MM-dd"));
       rest = cut(rest, res.index, res.text.length);
     }
   }
 
-  return { rest, days: [...new Set(days)].sort() };
+  const unique = [...new Set(firsts)].sort();
+  if (!recurring || unique.length === 0) return { rest, days: unique, seriesNote: null };
+
+  // Expand repeats: weekly (or fortnightly) from each first date.
+  const step = 7 * repeat.interval;
+  const days: string[] = [];
+  for (const first of unique) {
+    const start = parseISO(`${first}T12:00:00`);
+    const lastByWeeks = addDays(start, (repeat.weeks ?? REPEAT_DEFAULT_WEEKS) * 7 - 1);
+    const last = repeat.until ? parseISO(`${repeat.until}T12:00:00`) : lastByWeeks;
+    for (let d = start; d <= last && days.length < REPEAT_MAX_EVENTS; d = addDays(d, step)) {
+      days.push(format(d, "yyyy-MM-dd"));
+    }
+  }
+  days.sort();
+  const lastDay = days[days.length - 1];
+  const seriesNote = `${repeat.interval === 2 ? "every other week" : "weekly"} ×${days.length}, until ${format(parseISO(`${lastDay}T12:00:00`), "EEE d MMM")}`;
+  return { rest, days, seriesNote };
+}
+
+/** Shared front half of both parsers: spoken times, day parts, relative dates, times, days. */
+function extractWhen(text: string, today: string) {
+  let rest = ` ${normaliseSpokenTimes(text.replace(/[–—]/g, "-"))} `;
+  let dayPart: "am" | "pm" | null = null;
+  let impliesToday = false;
+  for (const dp of DAY_PARTS) {
+    const m = dp.pattern.exec(rest);
+    if (m) {
+      dayPart = dp.mer;
+      impliesToday = dp.today;
+      rest = cut(rest, m.index, m[0].length);
+      break;
+    }
+  }
+  const relative = extractRelative(rest, today);
+  rest = relative.rest;
+  const times = extractTimes(rest, dayPart);
+  rest = times.rest;
+  const dates = extractDays(rest, today, relative.repeat);
+  rest = dates.rest;
+  let days = [...new Set([...relative.days, ...dates.days])].sort();
+  if (!days.length && impliesToday) days = [today];
+  return { rest, times, days, seriesNote: dates.seriesNote };
 }
 
 function findNames<T extends { id: string; name: string }>(text: string, list: T[]) {
@@ -228,13 +370,10 @@ function tidyTitle(words: string): string {
 
 /** Parse a new-event message. `today` is YYYY-MM-DD in London. */
 export function parseNewEvent(text: string, dir: Directory, today: string): ParseResult {
-  let rest = ` ${text.replace(/[–—]/g, "-")} `;
-
-  const times = extractTimes(rest);
-  rest = times.rest;
-  const dates = extractDays(rest, today);
-  rest = dates.rest;
-  if (dates.days.length === 0) {
+  const when = extractWhen(text, today);
+  let rest = when.rest;
+  const times = when.times;
+  if (when.days.length === 0) {
     return {
       ok: false,
       message:
@@ -274,7 +413,8 @@ export function parseNewEvent(text: string, dir: Directory, today: string): Pars
 
   return {
     ok: true,
-    events: dates.days.map((day) => ({
+    seriesNote: when.seriesNote,
+    events: when.days.map((day) => ({
       title: title.slice(0, 200),
       day,
       startTime,
@@ -304,11 +444,10 @@ export function parseThreadReply(text: string, dir: Directory, today: string): T
   if (/\b(cancel(?:led)?|delete|remove|scrap|not happening|called off)\b/i.test(text))
     return { kind: "cancel" };
 
-  let rest = ` ${text.replace(/[–—]/g, "-")} `;
-  const times = extractTimes(rest);
-  rest = times.rest;
-  const dates = extractDays(rest, today);
-  rest = dates.rest;
+  const when = extractWhen(text, today);
+  const rest = when.rest;
+  const times = when.times;
+  const dates = { days: when.days };
   const helper = findNames(rest, dir.helpers).found[0] ?? null;
   const person = helper ? null : (findNames(rest, dir.people).found[0] ?? null);
   const me = !helper && !person && /\b(I'm|I'll|I|me)\b/i.test(rest);

@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { appUserForSlackUser, eventIdsInThread, slackApi, verifySlackRequest } from "@/lib/slack";
 import { parseNewEvent, parseThreadReply, shiftEnd } from "@/lib/quickAdd";
 import { describe, loadDirectory, postConfirmation, rowToInput } from "@/lib/slackUi";
+import { addDays, differenceInCalendarDays, format, parseISO } from "date-fns";
 import { createWeekEvent, deleteWeekEvent, updateWeekEvent } from "@/lib/weekEvents";
 import { londonToday } from "@/lib/time";
 
@@ -92,6 +93,10 @@ async function handleMessage(event: SlackMessageEvent) {
         return;
       }
 
+      // For a series, a new day moves every date by the same number of days.
+      const shiftDays = cmd.kind === "change" && cmd.day && rows.length > 1
+        ? differenceInCalendarDays(parseISO(cmd.day), parseISO(rows[0].day))
+        : null;
       const lines: string[] = [];
       const remaining = new Set(existingIds);
       const edited: { id: string; title: string }[] = [];
@@ -108,7 +113,9 @@ async function handleMessage(event: SlackMessageEvent) {
           continue;
         }
         const input = rowToInput(row);
-        if (cmd.day) input.day = cmd.day;
+        if (shiftDays !== null) {
+          input.day = format(addDays(parseISO(input.day), shiftDays), "yyyy-MM-dd");
+        } else if (cmd.day) input.day = cmd.day;
         if (cmd.startTime) {
           input.endTime = cmd.endTime ?? shiftEnd(input.startTime, input.endTime, cmd.startTime);
           input.startTime = cmd.startTime;
@@ -121,12 +128,22 @@ async function handleMessage(event: SlackMessageEvent) {
         edited.push({ id: row.id, title: input.title });
         lines.push(`✏️ Updated ${describe(dir, input)}`);
       }
+      // Keep series replies short: one line instead of one per date.
+      const summary =
+        lines.length > 3
+          ? [
+              cmd.kind === "cancel"
+                ? `🗑️ Removed ${lines.filter((l) => l.startsWith("🗑️")).length} events`
+                : `✏️ Updated ${edited.length} events — first is now ${lines.find((l) => l.startsWith("✏️"))?.replace("✏️ Updated ", "")}`,
+              ...lines.filter((l) => l.startsWith("🔒")).slice(0, 1),
+            ]
+          : lines;
       await postConfirmation({
         channel: event.channel,
         threadTs,
-        lines,
+        lines: summary,
         ids: [...remaining],
-        editable: edited,
+        editable: edited.length <= 3 ? edited : [],
       });
       return;
     }
@@ -144,7 +161,11 @@ async function handleMessage(event: SlackMessageEvent) {
       const res = await createWeekEvent(admin, userId, ev);
       created.push({ id: res.id, title: ev.title });
       if (!res.lifeSynced) lifeWarning = true;
-      lines.push(`✅ Added ${describe(dir, ev)}`);
+      if (!parsed.seriesNote) lines.push(`✅ Added ${describe(dir, ev)}`);
+    }
+    // A repeating series gets one summary line rather than one per date.
+    if (parsed.seriesNote) {
+      lines.push(`✅ Added ${describe(dir, parsed.events[0])} · 🔁 ${parsed.seriesNote}`);
     }
     if (lifeWarning) lines.push("_(Saved in the app, but the Life calendar sync failed.)_");
     await postConfirmation({
@@ -153,7 +174,8 @@ async function handleMessage(event: SlackMessageEvent) {
       lines,
       ids: created.map((c) => c.id),
       undoIds: created.map((c) => c.id),
-      editable: created,
+      // Edit buttons for one-offs only; a series is changed by replying in the thread.
+      editable: parsed.seriesNote ? [] : created,
     });
   } catch (e) {
     console.error("slack handleMessage failed", e);
