@@ -28,9 +28,33 @@ const REPEAT_DEFAULT_WEEKS = 8;
 /** Hard cap on how many events one message can create. */
 const REPEAT_MAX_EVENTS = 40; // also keeps the Undo button under Slack's 2000-char limit
 
+const HOUR_WORDS: Record<string, number> = {
+  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8,
+  nine: 9, ten: 10, eleven: 11, twelve: 12,
+};
+const HW = "one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve";
+
+/**
+ * Voice dictation gives words ("four till five", "seven p.m.", "four thirty").
+ * Turn hour words into digits where they're clearly times, so the same rules
+ * apply as for typed messages. "in two weeks" / "for six weeks" are left alone.
+ */
+function normaliseSpokenNumbers(text: string): string {
+  const d = (w: string) => String(HOUR_WORDS[w.toLowerCase()]);
+  return text
+    .replace(/\ba\.\s?m\.?/gi, "am")
+    .replace(/\bp\.\s?m\.?/gi, "pm")
+    .replace(/\bo'?\s?clock\b/gi, "")
+    .replace(new RegExp(String.raw`\b(${HW})\s+(thirty|fifteen|forty[\s-]five)\b`, "gi"), (_, h, m) =>
+      `${d(h)}:${/thirty/i.test(m) ? "30" : /fifteen/i.test(m) ? "15" : "45"}`,
+    )
+    .replace(new RegExp(String.raw`\b(at|half|past|from|till|til|until|to|and|between)\s+(${HW})\b`, "gi"), (_, p, h) => `${p} ${d(h)}`)
+    .replace(new RegExp(String.raw`\b(${HW})(?=\s*(?:am|pm|-|till|til|until|to\s+\d)\b)`, "gi"), (h) => d(h));
+}
+
 /** Spoken times → digits. "half 4" is the British 4:30. */
 function normaliseSpokenTimes(text: string): string {
-  return text
+  return normaliseSpokenNumbers(text)
     .replace(/\b(?:at\s+)?(noon|midday)\b/gi, " 12:00 ")
     .replace(/\bhalf\s+(?:past\s+)?(\d{1,2})\b/gi, " $1:30 ")
     .replace(/\bquarter\s+past\s+(\d{1,2})\b/gi, " $1:15 ")

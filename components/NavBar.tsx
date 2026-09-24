@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { APP_NAME } from "@/lib/constants";
 import CommentsNavBadge from "@/components/CommentsNavBadge";
 import TodoNavBadge from "@/components/TodoNavBadge";
+import QuickAddChat from "@/components/QuickAddChat";
 
 const LINKS = [
   { href: "/", label: "Calendar" },
@@ -21,6 +22,7 @@ export default function NavBar() {
   const pathname = usePathname();
 
   return (
+    <>
     <header className="nav-safe sticky top-0 z-20 border-b border-black/10 bg-white/80 backdrop-blur dark:border-white/10 dark:bg-neutral-900/80">
       <div className="flex items-center gap-2 px-3 py-3 sm:px-4">
         <Link href="/" aria-label={APP_NAME} className="flex shrink-0 items-center gap-2 font-semibold">
@@ -111,5 +113,8 @@ export default function NavBar() {
         </>
       )}
     </header>
+    {/* Outside the header: its backdrop-blur would trap position:fixed children. */}
+    <QuickAddChat />
+    </>
   );
 }
