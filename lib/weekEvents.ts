@@ -26,14 +26,8 @@ async function syncToLife(
   googleEventId: string | null,
 ): Promise<{ lifeSynced: boolean; warning?: string }> {
   try {
-    const [assigneeRes, helperRes, kidsRes] = await Promise.all([
-      ev.assigneeUserId
-        ? admin
-            .from("profiles")
-            .select("display_name")
-            .eq("id", ev.assigneeUserId)
-            .maybeSingle()
-        : Promise.resolve({ data: null }),
+    const [peopleRes, helperRes, kidsRes] = await Promise.all([
+      admin.from("profiles").select("id, display_name").order("created_at"),
       ev.helperId
         ? admin.from("helpers").select("name").eq("id", ev.helperId).maybeSingle()
         : Promise.resolve({ data: null }),
@@ -45,8 +39,13 @@ async function syncToLife(
             .order("sort_order", { ascending: true })
         : Promise.resolve({ data: [] as { id: string; name: string }[] }),
     ]);
+    const people = (peopleRes.data ?? []).filter((p) => p.display_name?.trim());
+    // Nobody assigned = a family event (both adults), e.g. "Legoland (David & Ashley)".
     const assigneeName =
-      helperRes.data?.name ?? assigneeRes.data?.display_name ?? null;
+      helperRes.data?.name ??
+      (ev.assigneeUserId
+        ? (people.find((p) => p.id === ev.assigneeUserId)?.display_name ?? null)
+        : people.map((p) => p.display_name!.trim()).join(" & ") || null);
     const kidNames = (kidsRes.data ?? []).map((k) => k.name);
     const newGoogleEventId = await upsertWeekEventOnLifeCalendar({
       id,
