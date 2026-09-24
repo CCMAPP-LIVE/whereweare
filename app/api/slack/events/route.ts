@@ -121,7 +121,10 @@ async function handleMessage(event: SlackMessageEvent) {
           input.endTime = cmd.endTime ?? shiftEnd(input.startTime, input.endTime, cmd.startTime);
           input.startTime = cmd.startTime;
         }
-        if (cmd.helperId || cmd.assigneeUserId) {
+        if (cmd.shared) {
+          input.helperId = null;
+          input.assigneeUserId = null;
+        } else if (cmd.helperId || cmd.assigneeUserId) {
           input.helperId = cmd.helperId;
           input.assigneeUserId = cmd.helperId ? null : cmd.assigneeUserId;
         }

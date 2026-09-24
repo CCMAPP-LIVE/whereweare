@@ -52,6 +52,14 @@ const DAY_PARTS: { pattern: RegExp; mer: "am" | "pm"; today: boolean }[] = [
   { pattern: /\btonight\b/i, mer: "pm", today: true },
 ];
 
+/**
+ * Words meaning "both of us" — the event is shared, so it isn't assigned to
+ * one person. Naming more than one adult ("me and Ashley") does the same.
+ */
+const SHARED = /\b(both\s+of\s+us|all\s+of\s+us|the\s+(?:whole\s+)?family|whole\s+family|everyone|everybody|both|us|we're|we'll|we)\b/i;
+/** Of those, these also mean all the kids. */
+const WHOLE_FAMILY = /^(all\s+of\s+us|the\s+(?:whole\s+)?family|whole\s+family|everyone|everybody)$/i;
+
 /** Keywords that become a standard title (so they line up with /school). */
 const TITLE_KEYWORDS: { pattern: RegExp; title: string }[] = [
   { pattern: /\b(drop[\s-]?offs?|drops?)\b/i, title: "Drop-off" },
@@ -336,9 +344,11 @@ function extractWhen(text: string, today: string) {
       break;
     }
   }
+  const allDay = /\ball[\s-]?day\b/i.exec(rest);
+  if (allDay) rest = cut(rest, allDay.index, allDay[0].length);
   const relative = extractRelative(rest, today);
   rest = relative.rest;
-  const times = extractTimes(rest, dayPart);
+  const times = allDay ? { rest, start: null, end: null } : extractTimes(rest, dayPart);
   rest = times.rest;
   const dates = extractDays(rest, today, relative.repeat);
   rest = dates.rest;
@@ -410,11 +420,16 @@ export function parseNewEvent(text: string, dir: Directory, today: string): Pars
   rest = peopleRes.rest;
   const me = /\b(I'm|I'll|I|me|myself)\b/i.exec(rest);
   if (me) rest = cut(rest, me.index, me[0].length);
+  const sharedWord = SHARED.exec(rest);
+  if (sharedWord) rest = cut(rest, sharedWord.index, sharedWord[0].length);
 
-  // Assignee: a named helper, else a named person, else whoever posted it.
-  const helper = helperRes.found[0] ?? null;
-  const person = helper ? null : (peopleRes.found[0] ?? null);
-  const assigneeUserId = helper ? null : (person?.id ?? dir.senderId);
+  // Assignee: shared if "us"/"everyone" or more than one adult is named;
+  // else a named helper, else a named person, else whoever posted it.
+  const adults = new Set([...peopleRes.found.map((p) => p.id), ...(me ? [dir.senderId] : [])]);
+  const shared = !!sharedWord || adults.size > 1;
+  const helper = shared ? null : (helperRes.found[0] ?? null);
+  const person = helper || shared ? null : (peopleRes.found[0] ?? null);
+  const assigneeUserId = helper || shared ? null : (person?.id ?? dir.senderId);
 
   let title = "";
   let notes: string | null = null;
@@ -441,7 +456,9 @@ export function parseNewEvent(text: string, dir: Directory, today: string): Pars
       startTime,
       endTime,
       notes,
-      kidIds: kidsRes.found.map((k) => k.id),
+      kidIds: (sharedWord && WHOLE_FAMILY.test(sharedWord[1]) ? dir.kids : kidsRes.found).map(
+        (k) => k.id,
+      ),
       assigneeUserId,
       helperId: helper?.id ?? null,
     })),
@@ -453,6 +470,7 @@ export type ThreadCommand =
   | {
       kind: "change";
       title: string | null;
+      shared: boolean;
       day: string | null;
       startTime: string | null;
       endTime: string | null;
@@ -478,6 +496,7 @@ export function parseThreadReply(text: string, dir: Directory, today: string): T
       return {
         kind: "change",
         title: title.slice(0, 200),
+        shared: false,
         day: null,
         startTime: null,
         endTime: null,
@@ -494,14 +513,21 @@ export function parseThreadReply(text: string, dir: Directory, today: string): T
   const rest = when.rest;
   const times = when.times;
   const dates = { days: when.days };
-  const helper = findNames(rest, dir.helpers).found[0] ?? null;
-  const person = helper ? null : (findNames(rest, dir.people).found[0] ?? null);
-  const me = !helper && !person && /\b(I'm|I'll|I|me)\b/i.test(rest);
+  const peopleFound = findNames(rest, dir.people).found;
+  const meFound = /\b(I'm|I'll|I|me)\b/i.test(rest);
+  const shared =
+    SHARED.test(rest) ||
+    new Set([...peopleFound.map((p) => p.id), ...(meFound ? [dir.senderId] : [])]).size > 1;
+  const helper = shared ? null : (findNames(rest, dir.helpers).found[0] ?? null);
+  const person = helper || shared ? null : (peopleFound[0] ?? null);
+  const me = !helper && !person && !shared && meFound;
 
-  if (!times.start && !dates.days.length && !helper && !person && !me) return { kind: "unknown" };
+  if (!times.start && !dates.days.length && !helper && !person && !me && !shared)
+    return { kind: "unknown" };
   return {
     kind: "change",
     title: null,
+    shared,
     day: dates.days[0] ?? null,
     startTime: times.start,
     endTime: times.start ? (times.end ?? null) : null,

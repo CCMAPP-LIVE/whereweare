@@ -45,8 +45,8 @@ export function describe(dir: Directory, ev: WeekEventInput): string {
   if (ev.startTime) when += `, ${ev.startTime}${ev.endTime ? `–${ev.endTime}` : ""}`;
   else when += " (all day)";
   bits.push(when);
-  const who = whoName(dir, ev);
-  if (who) bits.push(who);
+  // Unassigned = shared by the household.
+  bits.push(whoName(dir, ev) ?? "Everyone");
   return bits.join(" · ");
 }
 
