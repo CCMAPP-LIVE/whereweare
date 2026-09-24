@@ -23,7 +23,15 @@ type Summary = {
 
 type Preview =
   | { ok: false; message: string }
-  | { ok: true; kind: "add"; summary: Summary; who: string; kids: string[] }
+  | {
+      ok: true;
+      kind: "add";
+      summary: Summary;
+      who: string;
+      kids: string[];
+      meridiem: "am" | "pm" | null;
+      flipped: boolean;
+    }
   | {
       ok: true;
       kind: "change";
@@ -45,7 +53,7 @@ type Msg =
   | { role: "done"; text: string; undo: UndoPayload; undone?: boolean; lifeSynced: boolean };
 
 export type Person = { id: string; name: string };
-type Overrides = { who?: string; kids?: string[] };
+type Overrides = { who?: string; kids?: string[]; flip?: boolean };
 
 const EXAMPLES = [
   "Percy swimming Thu 4-5",
@@ -507,6 +515,32 @@ export default function QuickAddChat() {
                                 </Chip>
                               );
                             })}
+                          </div>
+                        )}
+                        {shown.meridiem && (
+                          <div className="mt-1 flex flex-wrap items-center gap-1">
+                            <span className="mr-0.5 text-[10px] uppercase text-neutral-400">
+                              Time
+                            </span>
+                            {/* Swaps 07:30 ↔ 19:30 when the am/pm guess is wrong. */}
+                            <Chip
+                              active={shown.meridiem === "am"}
+                              onClick={() =>
+                                shown.meridiem === "pm" &&
+                                setOverrides((o) => ({ ...o, flip: !o.flip }))
+                              }
+                            >
+                              am
+                            </Chip>
+                            <Chip
+                              active={shown.meridiem === "pm"}
+                              onClick={() =>
+                                shown.meridiem === "am" &&
+                                setOverrides((o) => ({ ...o, flip: !o.flip }))
+                              }
+                            >
+                              pm
+                            </Chip>
                           </div>
                         )}
                       </>

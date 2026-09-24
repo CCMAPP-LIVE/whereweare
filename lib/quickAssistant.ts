@@ -40,11 +40,29 @@ export type Summary = {
 export type Overrides = {
   who?: string; // "me" | "p:<id>" | "h:<id>" | "shared"
   kids?: string[];
+  flip?: boolean; // swap am/pm on the times
 };
+
+/** Move "07:30" ↔ "19:30" (keeping within the day). */
+function flip12(t: string | null, toPm: boolean): string | null {
+  if (!t) return t;
+  const [h, m] = t.split(":").map(Number);
+  const nh = toPm ? (h < 12 ? h + 12 : h) : h >= 12 ? h - 12 : h;
+  return `${String(nh).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
 
 export type PreviewResult =
   | { ok: false; message: string }
-  | { ok: true; kind: "add"; summary: Summary; who: string; kids: string[] }
+  | {
+      ok: true;
+      kind: "add";
+      summary: Summary;
+      who: string;
+      kids: string[];
+      /** Whether the start is am/pm (null for all-day), for the am↔pm chip. */
+      meridiem: "am" | "pm" | null;
+      flipped: boolean;
+    }
   | {
       ok: true;
       kind: "change";
@@ -61,8 +79,7 @@ export type Snapshot = { id: string; input: WeekEventInput };
 
 const QUESTION =
   /^\s*(what|what's|whats|who|who's|whos|when|when's|anything|is\s+there|are\s+we|do\s+we|have\s+we|show\s+me|list)\b|\?\s*$/i;
-const CHANGE =
-  /^\s*(cancel|delete|remove|scrap|move|reschedule|push|shift|change|rename|make)\b/i;
+const CHANGE = /^\s*(cancel|delete|remove|scrap|move|reschedule|push|shift|change|rename|make)\b/i;
 
 export function intentOf(text: string): "question" | "change" | "add" {
   if (CHANGE.test(text)) return "change";
@@ -109,7 +126,15 @@ function applyOverrides(events: ParsedEvent[], o: Overrides | undefined, dir: Di
       out.assigneeUserId = null;
       out.helperId = o.who.slice(2);
     }
-    if (Array.isArray(o.kids)) out.kidIds = dir.kids.filter((k) => o.kids!.includes(k.id)).map((k) => k.id);
+    if (Array.isArray(o.kids))
+      out.kidIds = dir.kids.filter((k) => o.kids!.includes(k.id)).map((k) => k.id);
+    // am↔pm swap for timed single-day events (not the 00:00/23:59 parts of a span).
+    if (o.flip && out.startTime && out.startTime !== "00:00" && out.endTime !== "23:59") {
+      const toPm = Number(out.startTime.slice(0, 2)) < 12;
+      out.startTime = flip12(out.startTime, toPm);
+      out.endTime = flip12(out.endTime, toPm);
+      if (out.endTime && out.startTime && out.endTime <= out.startTime) out.endTime = "23:59";
+    }
     return out;
   });
 }
@@ -119,7 +144,8 @@ function planAdd(text: string, dir: Directory, today: string, o?: Overrides) {
   if (!parsed.ok) return { error: parsed.message } as const;
   const events = applyOverrides(parsed.events, o, dir);
   const first = events[0];
-  let when = parsed.spanLabel ?? `${dayLabel(first.day)}, ${timeLabel(first.startTime, first.endTime)}`;
+  let when =
+    parsed.spanLabel ?? `${dayLabel(first.day)}, ${timeLabel(first.startTime, first.endTime)}`;
   if (parsed.seriesNote) when += ` · repeats ${parsed.seriesNote}`;
   else if (!parsed.spanLabel && events.length > 1)
     when = `${events.map((e) => dayLabel(e.day)).join(" & ")}, ${timeLabel(first.startTime, first.endTime)}`;
@@ -131,7 +157,20 @@ function planAdd(text: string, dir: Directory, today: string, o?: Overrides) {
     count: events.length,
     notes: parsed.spanLabel ? null : first.notes,
   };
-  return { events, summary, who: whoKey(first, dir.senderId), kids: first.kidIds } as const;
+  const meridiem =
+    first.startTime && !parsed.spanLabel
+      ? Number(first.startTime.slice(0, 2)) < 12
+        ? "am"
+        : "pm"
+      : null;
+  return {
+    events,
+    summary,
+    who: whoKey(first, dir.senderId),
+    kids: first.kidIds,
+    meridiem,
+    flipped: !!o?.flip,
+  } as const;
 }
 
 // ─── CHANGE ───────────────────────────────────────────────────────────────
@@ -197,11 +236,14 @@ async function planChange(admin: Admin, text: string, dir: Directory, today: str
     .replace(/'s\b/g, "")
     .split(/\s+/)
     .filter((w) => w && !STOP.has(w));
-  if (!words.length) return { error: "Which event? e.g. “move swimming to Friday” or “cancel Legoland”." } as const;
+  if (!words.length)
+    return { error: "Which event? e.g. “move swimming to Friday” or “cancel Legoland”." } as const;
 
   const { data } = await admin
     .from("week_events")
-    .select("id, user_id, day, start_time, end_time, title, notes, kid_ids, assignee_user_id, helper_id, google_event_id")
+    .select(
+      "id, user_id, day, start_time, end_time, title, notes, kid_ids, assignee_user_id, helper_id, google_event_id",
+    )
     .gte("day", today)
     .lte("day", format(addDays(parseISO(`${today}T12:00:00`), 180), "yyyy-MM-dd"))
     .order("day");
@@ -221,13 +263,16 @@ async function planChange(admin: Admin, text: string, dir: Directory, today: str
   const titles = [...new Set(rows.map((r) => r.title.toLowerCase()))];
   if (titles.length > 1) {
     const names = [...new Set(rows.map((r) => `${r.title} (${dayLabel(r.day)})`))].slice(0, 4);
-    return { error: `Which one? ${names.join(", ")}. Add a word or the day to narrow it down.` } as const;
+    return {
+      error: `Which one? ${names.join(", ")}. Add a word or the day to narrow it down.`,
+    } as const;
   }
 
   const mine = rows.filter((r) => r.user_id === dir.senderId);
   const notMine = rows.length - mine.length;
   if (!mine.length) {
-    const owner = dir.people.find((p) => p.id === rows[0].user_id)?.name ?? "the person who added it";
+    const owner =
+      dir.people.find((p) => p.id === rows[0].user_id)?.name ?? "the person who added it";
     return { error: `Only ${owner} can change “${rows[0].title}”.` } as const;
   }
 
@@ -244,22 +289,31 @@ async function planChange(admin: Admin, text: string, dir: Directory, today: str
   }
 
   // Rename vs. time/day/person change.
-  const reply = verb === "rename" ? null : parseThreadReply(destText, dir, moveBase(destText, first.day, today));
+  const reply =
+    verb === "rename"
+      ? null
+      : parseThreadReply(destText, dir, moveBase(destText, first.day, today));
   if (reply?.kind === "change") reply.day = notInPast(reply.day, today);
   const newTitle =
-    verb === "rename" || (reply?.kind === "unknown" && destText && !extractWhen(destText, today).days.length)
+    verb === "rename" ||
+    (reply?.kind === "unknown" && destText && !extractWhen(destText, today).days.length)
       ? tidyTitle(destText)
       : null;
   if (!newTitle && (!reply || reply.kind !== "change"))
-    return { error: "What should change? e.g. “to Friday”, “to 5pm”, “to Ashley”, or “rename … to …”." } as const;
+    return {
+      error: "What should change? e.g. “to Friday”, “to 5pm”, “to Ashley”, or “rename … to …”.",
+    } as const;
 
   const shift =
-    reply?.kind === "change" && reply.day ? differenceInCalendarDays(parseISO(reply.day), parseISO(first.day)) : null;
+    reply?.kind === "change" && reply.day
+      ? differenceInCalendarDays(parseISO(reply.day), parseISO(first.day))
+      : null;
   const updates: Snapshot[] = mine.map((r) => {
     const input = toInput(r);
     if (newTitle) input.title = newTitle.slice(0, 200);
     if (reply?.kind === "change") {
-      if (shift !== null) input.day = format(addDays(parseISO(`${r.day}T12:00:00`), shift), "yyyy-MM-dd");
+      if (shift !== null)
+        input.day = format(addDays(parseISO(`${r.day}T12:00:00`), shift), "yyyy-MM-dd");
       if (reply.startTime) {
         input.endTime = reply.endTime ?? shiftEnd(input.startTime, input.endTime, reply.startTime);
         input.startTime = reply.startTime;
@@ -277,7 +331,9 @@ async function planChange(admin: Admin, text: string, dir: Directory, today: str
   });
   const u = updates[0].input;
   const after = `${newTitle ? `“${u.title}” · ` : ""}${dayLabel(u.day)}, ${timeLabel(u.startTime, u.endTime)}${
-    reply?.kind === "change" && (reply.shared || reply.helperId || reply.assigneeUserId) ? ` · ${whoLabel(dir, u)}` : ""
+    reply?.kind === "change" && (reply.shared || reply.helperId || reply.assigneeUserId)
+      ? ` · ${whoLabel(dir, u)}`
+      : ""
   }`;
   return {
     action: (shift !== null ? "move" : "update") as "move" | "update",
@@ -295,13 +351,15 @@ function rangeFor(text: string, today: string): { from: string; to: string; labe
   const f = (d: Date) => format(d, "yyyy-MM-dd");
   if (/\bnext\s+week\b/i.test(text))
     return { from: f(addDays(monday, 7)), to: f(addDays(monday, 13)), label: "Next week" };
-  if (/\b(this\s+)?week\b/i.test(text)) return { from: today, to: f(addDays(monday, 6)), label: "This week" };
+  if (/\b(this\s+)?week\b/i.test(text))
+    return { from: today, to: f(addDays(monday, 6)), label: "This week" };
   if (/\b(this\s+)?weekend\b/i.test(text)) {
     const sat = addDays(monday, getISODay(base) === 7 ? -1 : 5);
     return { from: f(sat), to: f(addDays(sat, 1)), label: "This weekend" };
   }
   const days = extractWhen(text, today).days;
-  if (days.length) return { from: days[0], to: days[days.length - 1], label: days.map(dayLabel).join(" & ") };
+  if (days.length)
+    return { from: days[0], to: days[days.length - 1], label: days.map(dayLabel).join(" & ") };
   return { from: today, to: today, label: "Today" };
 }
 
@@ -315,7 +373,9 @@ async function answer(admin: Admin, text: string, dir: Directory, today: string)
       ? Promise.resolve({ data: [] as Row[] })
       : admin
           .from("week_events")
-          .select("id, user_id, day, start_time, end_time, title, notes, kid_ids, assignee_user_id, helper_id, google_event_id")
+          .select(
+            "id, user_id, day, start_time, end_time, title, notes, kid_ids, assignee_user_id, helper_id, google_event_id",
+          )
           .gte("day", range.from)
           .lte("day", range.to),
     admin
@@ -338,8 +398,10 @@ async function answer(admin: Admin, text: string, dir: Directory, today: string)
   }
   for (const s of schoolRes.data ?? []) {
     if (kidFilter.length && !kidFilter.some((k) => k.id === s.kid_id)) continue;
-    if (schoolOnly && /drop/i.test(text) && !/pick|collect/i.test(text) && s.kind !== "drop") continue;
-    if (schoolOnly && /pick|collect/i.test(text) && !/drop/i.test(text) && s.kind !== "pickup") continue;
+    if (schoolOnly && /drop/i.test(text) && !/pick|collect/i.test(text) && s.kind !== "drop")
+      continue;
+    if (schoolOnly && /pick|collect/i.test(text) && !/drop/i.test(text) && s.kind !== "pickup")
+      continue;
     const kid = dir.kids.find((k) => k.id === s.kid_id)?.name ?? "";
     const who =
       dir.helpers.find((h) => h.id === s.helper_id)?.name ??
@@ -393,20 +455,29 @@ export async function preview(
   if (intent === "change") {
     const c = await planChange(admin, text, dir, today);
     if (c.error !== undefined && !addFallback(c, text)) return { ok: false, message: c.error };
-    if (c.error === undefined) return {
-      ok: true,
-      kind: "change",
-      action: c.action,
-      title: c.preview.title,
-      before: c.preview.before,
-      after: c.preview.after,
-      count: c.preview.count,
-      note: c.preview.notMine ? `${c.preview.notMine} added by someone else won't change.` : null,
-    };
+    if (c.error === undefined)
+      return {
+        ok: true,
+        kind: "change",
+        action: c.action,
+        title: c.preview.title,
+        before: c.preview.before,
+        after: c.preview.after,
+        count: c.preview.count,
+        note: c.preview.notMine ? `${c.preview.notMine} added by someone else won't change.` : null,
+      };
   }
   const a = planAdd(text, dir, today, overrides);
   if ("error" in a) return { ok: false, message: a.error! };
-  return { ok: true, kind: "add", summary: a.summary, who: a.who, kids: a.kids };
+  return {
+    ok: true,
+    kind: "add",
+    summary: a.summary,
+    who: a.who,
+    kids: a.kids,
+    meridiem: a.meridiem,
+    flipped: a.flipped,
+  };
 }
 
 /**
@@ -421,7 +492,14 @@ export async function apply(
   overrides?: Overrides,
 ): Promise<
   | { ok: false; message: string }
-  | { ok: true; message: string; created: string[]; restore: Snapshot[]; removed: Snapshot[]; lifeSynced: boolean }
+  | {
+      ok: true;
+      message: string;
+      created: string[];
+      restore: Snapshot[];
+      removed: Snapshot[];
+      lifeSynced: boolean;
+    }
 > {
   const intent = intentOf(text);
   if (intent === "question") return { ok: false, message: "That's a question — press Ask." };
@@ -506,19 +584,27 @@ export async function undo(
 ) {
   const created = (payload.created ?? []).slice(0, 60);
   if (created.length) {
-    const { data } = await admin.from("week_events").select("id, user_id, google_event_id").in("id", created);
-    for (const r of data ?? []) if (r.user_id === userId) await deleteWeekEvent(admin, r.id, r.google_event_id);
+    const { data } = await admin
+      .from("week_events")
+      .select("id, user_id, google_event_id")
+      .in("id", created);
+    for (const r of data ?? [])
+      if (r.user_id === userId) await deleteWeekEvent(admin, r.id, r.google_event_id);
   }
   const restore = (payload.restore ?? []).slice(0, 60);
   if (restore.length) {
     const { data } = await admin
       .from("week_events")
       .select("id, user_id, google_event_id")
-      .in("id", restore.map((s) => s.id));
+      .in(
+        "id",
+        restore.map((s) => s.id),
+      );
     for (const s of restore) {
       const row = (data ?? []).find((r) => r.id === s.id);
       const input = clean(s.input);
-      if (row && input && row.user_id === userId) await updateWeekEvent(admin, s.id, input, row.google_event_id);
+      if (row && input && row.user_id === userId)
+        await updateWeekEvent(admin, s.id, input, row.google_event_id);
     }
   }
   for (const s of (payload.removed ?? []).slice(0, 60)) {

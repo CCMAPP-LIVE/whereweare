@@ -52,6 +52,9 @@ const SECTIONS: {
     bullets: [
       "3pm, 8:45, 4-5, 2-4pm, 9 to 11, half 4, quarter past 3, quarter to 5, noon, all day",
       "A plain 7–11 is morning; a plain 12–6 is afternoon. For evenings say 7pm or tonight.",
+      "Dinner, drinks, pub, cinema, theatre, show, concert, bedtime, sleepover or “evening” make a plain time pm (“Dinner Fri 7.30” = 19:30). Breakfast / brunch keep it am.",
+      "Spoken or typed 730, 7 30, 7.30, 7:30 and 19:30 all work.",
+      "Wrong am/pm? Tap the am / pm chip on the preview.",
       "No end time → 1 hour. Start and finish on different days → one entry per day.",
     ],
   },

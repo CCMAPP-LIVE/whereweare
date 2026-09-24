@@ -42,6 +42,11 @@ const HW = "one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve";
 function normaliseSpokenNumbers(text: string): string {
   const d = (w: string) => String(HOUR_WORDS[w.toLowerCase()]);
   return text
+    // Dictation writes "seven thirty" as "730", "7 30" or "1930".
+    .replace(/\b([01]?\d|2[0-3])([0-5]\d)(?=\s*(?:am|pm|a\.m|p\.m)?\b)(?!\s*(?:st|nd|rd|th|\/))/gi, (m, h, mm) =>
+      m.length >= 3 ? `${h}:${mm}` : m,
+    )
+    .replace(/\b(\d{1,2})\s+(00|15|30|45)\b(?!\s*(?:st|nd|rd|th|minutes?|mins?|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))/gi, "$1:$2")
     .replace(/\ba\.\s?m\.?/gi, "am")
     .replace(/\bp\.\s?m\.?/gi, "pm")
     .replace(/\bo'?\s?clock\b/gi, "")
@@ -96,6 +101,15 @@ const FILLER = new Set(
     " ",
   ),
 );
+
+/**
+ * Words that say what time of day an event is, so a plain hour needs no am/pm:
+ * "Dinner Fri 7.30" = 19:30, "Breakfast Sat 9" = 09:00. Only used when the
+ * message has no am/pm or "tonight"/"this morning" of its own.
+ */
+const EVENING_WORDS =
+  /\b(dinner|supper|tea\s+at|drinks|pub|disco|cinema|film|movie|theatre|theater|show|concert|gig|date\s+night|bedtime|sleepover|evening|night|takeaway)\b/i;
+const MORNING_WORDS = /\b(breakfast|brunch)\b/i;
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -337,6 +351,11 @@ function extractDays(
   }
 
   if (firsts.length === 0) {
+    // "Oct 10" can read as October 2010 — say it the British way round first.
+    rest = rest.replace(
+      new RegExp(String.raw`\b(${MONTHS})([a-z]*)\s+(\d{1,2})(st|nd|rd|th)?\b(?!\s*,?\s*\d{4})`, "gi"),
+      (_, mon, tail, d, suf) => `${d}${suf ?? ""} ${mon}${tail}`,
+    );
     const results = chrono.en.GB.parse(rest, base, { forwardDate: true });
     for (const res of results) {
       firsts.push(format(res.start.date(), "yyyy-MM-dd"));
@@ -377,6 +396,10 @@ export function extractWhen(text: string, today: string) {
       rest = cut(rest, m.index, m[0].length);
       break;
     }
+  }
+  if (!dayPart) {
+    if (MORNING_WORDS.test(rest)) dayPart = "am";
+    else if (EVENING_WORDS.test(rest)) dayPart = "pm";
   }
   const allDay = /\ball[\s-]?day\b/i.exec(rest);
   if (allDay) rest = cut(rest, allDay.index, allDay[0].length);
