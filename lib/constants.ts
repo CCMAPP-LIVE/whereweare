@@ -38,11 +38,13 @@ export const APP_TIMEZONE = "Europe/London";
  */
 export const SCHOOL_DROP_TIMES: { value: string; label: string }[] = [
   { value: "08:00", label: "8:00 am" },
+  { value: "08:30", label: "8:30 am" },
   { value: "08:45", label: "8:45 am" },
   { value: "09:15", label: "9:15 am" },
 ];
 
 export const SCHOOL_PICKUP_TIMES: { value: string; label: string }[] = [
+  { value: "15:00", label: "3:00 pm" },
   { value: "15:15", label: "3:15 pm" },
   { value: "16:00", label: "4:00 pm" },
 ];
