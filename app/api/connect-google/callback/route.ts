@@ -88,7 +88,12 @@ export async function GET(request: Request) {
     await refreshCalendarsForUser(admin, user.id).catch(() => {});
   }
 
-  const res = NextResponse.redirect(`${origin}/settings?connected=1`);
+  const next = cookieStore.get("g_oauth_next")?.value ?? "";
+  const dest = next.startsWith("/") && !next.startsWith("//") ? next : "/settings";
+  const res = NextResponse.redirect(
+    `${origin}${dest}${dest.includes("?") ? "&" : "?"}connected=1`,
+  );
   res.cookies.set("g_oauth_state", "", { maxAge: 0, path: "/" });
+  res.cookies.set("g_oauth_next", "", { maxAge: 0, path: "/" });
   return res;
 }

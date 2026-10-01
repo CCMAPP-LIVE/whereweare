@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { google } from "googleapis";
 import { createClient } from "@/lib/supabase/server";
 import { requireEnv } from "@/lib/env";
+import { WRITE_SCOPE } from "@/lib/booking";
 
 /**
  * Start a direct Google OAuth flow to add a calendar account, INDEPENDENT of
@@ -33,17 +34,20 @@ export async function GET(request: Request) {
       "openid",
       "email",
       "https://www.googleapis.com/auth/calendar.readonly",
+      // Create events on this account — used ONLY for booking-link meetings,
+      // so their invites come from this address (brainshed, dmsco, …).
+      WRITE_SCOPE,
     ],
     state,
   });
 
+  // Where to land afterwards (e.g. back on /bookings). Same-site paths only.
+  const next = new URL(request.url).searchParams.get("next") ?? "";
+  const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "";
+
   const res = NextResponse.redirect(url);
-  res.cookies.set("g_oauth_state", state, {
-    httpOnly: true,
-    secure: true,
-    sameSite: "lax",
-    maxAge: 600,
-    path: "/",
-  });
+  const cookie = { httpOnly: true, secure: true, sameSite: "lax" as const, maxAge: 600, path: "/" };
+  res.cookies.set("g_oauth_state", state, cookie);
+  if (safeNext) res.cookies.set("g_oauth_next", safeNext, cookie);
   return res;
 }

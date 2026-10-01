@@ -14,6 +14,7 @@ const LINKS = [
   { href: "/plan", label: "Plan" },
   { href: "/school", label: "School" },
   { href: "/birthdays", label: "🎂 Birthdays" },
+  { href: "/bookings", label: "📅 Bookings" },
   { href: "/print", label: "🖨 Print" },
   { href: "/users", label: "People" },
   { href: "/settings", label: "Settings" },

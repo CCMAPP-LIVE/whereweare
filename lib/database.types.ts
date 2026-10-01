@@ -88,6 +88,111 @@ export type Database = {
         }
         Relationships: []
       }
+      booking_links: {
+        Row: {
+          active: boolean
+          add_meet: boolean
+          buffer_min: number
+          calendar_account_id: string
+          created_at: string
+          day_end: string
+          day_start: string
+          description: string | null
+          duration_min: number
+          host_name: string | null
+          id: string
+          max_days_ahead: number
+          min_notice_hours: number
+          slug: string
+          title: string
+          updated_at: string
+          user_id: string
+          weekdays: number[]
+        }
+        Insert: {
+          active?: boolean
+          add_meet?: boolean
+          buffer_min?: number
+          calendar_account_id: string
+          created_at?: string
+          day_end?: string
+          day_start?: string
+          description?: string | null
+          duration_min?: number
+          host_name?: string | null
+          id?: string
+          max_days_ahead?: number
+          min_notice_hours?: number
+          slug: string
+          title: string
+          updated_at?: string
+          user_id: string
+          weekdays?: number[]
+        }
+        Update: {
+          active?: boolean
+          add_meet?: boolean
+          buffer_min?: number
+          calendar_account_id?: string
+          created_at?: string
+          day_end?: string
+          day_start?: string
+          description?: string | null
+          duration_min?: number
+          host_name?: string | null
+          id?: string
+          max_days_ahead?: number
+          min_notice_hours?: number
+          slug?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+          weekdays?: number[]
+        }
+        Relationships: []
+      }
+      bookings: {
+        Row: {
+          created_at: string
+          end_at: string
+          google_event_id: string | null
+          guest_email: string
+          guest_name: string
+          id: string
+          link_id: string
+          meet_url: string | null
+          notes: string | null
+          start_at: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          end_at: string
+          google_event_id?: string | null
+          guest_email: string
+          guest_name: string
+          id?: string
+          link_id: string
+          meet_url?: string | null
+          notes?: string | null
+          start_at: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          end_at?: string
+          google_event_id?: string | null
+          guest_email?: string
+          guest_name?: string
+          id?: string
+          link_id?: string
+          meet_url?: string | null
+          notes?: string | null
+          start_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
       calendar_accounts: {
         Row: {
           account_email: string | null

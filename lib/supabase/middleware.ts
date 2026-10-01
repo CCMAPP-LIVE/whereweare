@@ -13,6 +13,8 @@ const PUBLIC_PREFIXES = [
   "/api/cron",
   "/api/slack", // Slack webhooks — verified by signing secret instead
   "/week/", // read-only shared week sheets — signed token instead of login
+  "/book/", // public "pick a time" booking pages (trailing slash: not /bookings)
+  "/api/book/",
   "/manifest.webmanifest",
   "/sw.js",
   "/icon",
