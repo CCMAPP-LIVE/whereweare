@@ -105,7 +105,9 @@ export default async function BookingsPage() {
     <>
       <NavBar />
       <BookingsManager
-        baseUrl={siteUrl()}
+        // Customer-facing address for links, e.g. https://meyouwhen.com/brainshed.
+        // Falls back to this app's own /book/ pages until the domain is live.
+        bookingBase={process.env.BOOKING_BASE_URL?.replace(/\/+$/, "") || `${siteUrl()}/book`}
         accounts={accounts}
         initialLinks={links}
         bookings={bookings}

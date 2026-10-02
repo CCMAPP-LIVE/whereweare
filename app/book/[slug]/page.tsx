@@ -29,6 +29,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { link } = await loadLink(slug);
   return {
     title: link ? `Book: ${link.title}` : "Booking",
+    applicationName: "MeYouWhen",
     robots: { index: false, follow: false },
   };
 }

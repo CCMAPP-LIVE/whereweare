@@ -151,12 +151,14 @@ const label = "mb-1 block text-xs font-medium uppercase text-neutral-400";
 
 function LinkForm({
   accounts,
+  linkPrefix,
   initial,
   submitLabel,
   onSubmit,
   onCancel,
 }: {
   accounts: ManagedAccount[];
+  linkPrefix: string;
   initial: FormState;
   submitLabel: string;
   onSubmit: (f: FormState) => Promise<string | null>;
@@ -209,7 +211,7 @@ function LinkForm({
         <label className="block">
           <span className={label}>Link name</span>
           <div className="flex items-center gap-1 text-sm">
-            <span className="shrink-0 text-neutral-400">/book/</span>
+            <span className="shrink-0 text-neutral-400">{linkPrefix.replace(/^https?:\/\//, "")}/</span>
             <input
               value={f.slug}
               onChange={(e) => set("slug", e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
@@ -416,13 +418,13 @@ function LinkForm({
 }
 
 export default function BookingsManager({
-  baseUrl,
+  bookingBase,
   accounts: initialAccounts,
   initialLinks,
   bookings: initialBookings,
   setupNeeded,
 }: {
-  baseUrl: string;
+  bookingBase: string;
   accounts: ManagedAccount[];
   initialLinks: ManagedLink[];
   bookings: ManagedBooking[];
@@ -436,7 +438,7 @@ export default function BookingsManager({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
 
-  const urlFor = (slug: string) => `${baseUrl}/book/${slug}`;
+  const urlFor = (slug: string) => `${bookingBase}/${slug}`;
   const emailOf = (accountId: string) => accounts.find((a) => a.id === accountId)?.email ?? "—";
   const linkTitle = (id: string) => links.find((l) => l.id === id)?.title ?? "Booking";
 
@@ -626,6 +628,7 @@ export default function BookingsManager({
           <div className="mb-4 rounded-xl bg-black/[0.03] p-3 dark:bg-white/5">
             <LinkForm
               accounts={accounts}
+              linkPrefix={bookingBase}
               initial={newForm}
               submitLabel="Create link"
               onCancel={links.length ? () => setCreating(false) : undefined}
@@ -650,6 +653,7 @@ export default function BookingsManager({
                 {editingId === l.id ? (
                   <LinkForm
                     accounts={accounts}
+                    linkPrefix={bookingBase}
                     initial={{
                       calendarAccountId: l.calendarAccountId,
                       slug: l.slug,
@@ -705,7 +709,7 @@ export default function BookingsManager({
                         {copied === l.slug ? "Copied ✓" : "Copy link"}
                       </button>
                       <a
-                        href={`/book/${l.slug}`}
+                        href={urlFor(l.slug)}
                         target="_blank"
                         rel="noreferrer"
                         className="text-xs text-teal-700 underline dark:text-teal-300"
