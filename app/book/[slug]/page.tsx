@@ -84,7 +84,8 @@ export default async function BookPage({ params }: Params) {
       dayStartHm={link.day_start.slice(0, 5)}
       addMeet={link.add_meet}
       inPerson={link.in_person}
-      location={link.in_person ? link.location : null}
+      location={link.in_person && link.location_mode !== "client" ? link.location : null}
+      atClientLocation={link.in_person && link.location_mode === "client"}
       slots={slots}
       unavailable={unavailable}
     />

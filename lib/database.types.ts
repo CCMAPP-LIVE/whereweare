@@ -104,6 +104,7 @@ export type Database = {
           in_person: boolean
           length_kind: string
           location: string | null
+          location_mode: string
           max_days_ahead: number
           min_notice_hours: number
           slug: string
@@ -127,6 +128,7 @@ export type Database = {
           in_person?: boolean
           length_kind?: string
           location?: string | null
+          location_mode?: string
           max_days_ahead?: number
           min_notice_hours?: number
           slug: string
@@ -150,6 +152,7 @@ export type Database = {
           in_person?: boolean
           length_kind?: string
           location?: string | null
+          location_mode?: string
           max_days_ahead?: number
           min_notice_hours?: number
           slug?: string
@@ -166,6 +169,7 @@ export type Database = {
           end_at: string
           google_event_id: string | null
           guest_email: string
+          guest_location: string | null
           guest_name: string
           id: string
           link_id: string
@@ -179,6 +183,7 @@ export type Database = {
           end_at: string
           google_event_id?: string | null
           guest_email: string
+          guest_location?: string | null
           guest_name: string
           id?: string
           link_id: string
@@ -192,6 +197,7 @@ export type Database = {
           end_at?: string
           google_event_id?: string | null
           guest_email?: string
+          guest_location?: string | null
           guest_name?: string
           id?: string
           link_id?: string

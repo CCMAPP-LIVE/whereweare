@@ -74,6 +74,7 @@ export default async function BookingsPage() {
     addMeet: l.add_meet,
     inPerson: l.in_person,
     location: l.location,
+    locationMode: l.location_mode === "client" ? "client" : "host",
     active: l.active,
   }));
 
@@ -81,7 +82,7 @@ export default async function BookingsPage() {
   if (links.length) {
     const { data: rows } = await admin
       .from("bookings")
-      .select("id, link_id, start_at, end_at, guest_name, guest_email, notes, meet_url")
+      .select("id, link_id, start_at, end_at, guest_name, guest_email, notes, meet_url, guest_location")
       .eq("status", "confirmed")
       .in(
         "link_id",
@@ -98,6 +99,7 @@ export default async function BookingsPage() {
       guestEmail: b.guest_email,
       notes: b.notes,
       meetUrl: b.meet_url,
+      guestLocation: b.guest_location,
     }));
   }
 

@@ -29,6 +29,7 @@ export type ManagedLink = {
   addMeet: boolean;
   inPerson: boolean;
   location: string | null;
+  locationMode: "host" | "client";
   active: boolean;
 };
 
@@ -41,6 +42,7 @@ export type ManagedBooking = {
   guestEmail: string;
   notes: string | null;
   meetUrl: string | null;
+  guestLocation: string | null;
 };
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -78,6 +80,7 @@ type FormState = {
   addMeet: boolean;
   inPerson: boolean;
   location: string;
+  locationMode: "host" | "client";
 };
 
 function toPayload(f: FormState) {
@@ -98,6 +101,7 @@ function toPayload(f: FormState) {
     add_meet: f.addMeet,
     in_person: f.inPerson,
     location: f.location,
+    location_mode: f.locationMode,
   };
 }
 
@@ -119,6 +123,7 @@ type ApiLink = {
   add_meet: boolean;
   in_person: boolean;
   location: string | null;
+  location_mode: string;
   active: boolean;
 };
 
@@ -141,6 +146,7 @@ function fromApi(l: ApiLink): ManagedLink {
     addMeet: l.add_meet,
     inPerson: l.in_person,
     location: l.location,
+    locationMode: l.location_mode === "client" ? "client" : "host",
     active: l.active,
   };
 }
@@ -385,12 +391,41 @@ function LinkForm({
           </label>
         </div>
         {f.inPerson && (
-          <input
-            value={f.location}
-            onChange={(e) => set("location", e.target.value)}
-            placeholder="Address, e.g. Brainshed, 12 High Street, Christchurch BH23 1AB"
-            className={`${input} mt-2`}
-          />
+          <div className="mt-2 space-y-1.5 rounded-lg border border-black/10 p-2 text-sm dark:border-white/10">
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="location-mode"
+                checked={f.locationMode === "host"}
+                onChange={() => set("locationMode", "host")}
+                className="accent-teal-600"
+              />
+              At my address
+            </label>
+            {f.locationMode === "host" && (
+              <input
+                value={f.location}
+                onChange={(e) => set("location", e.target.value)}
+                placeholder="Address, e.g. Brainshed, 12 High Street, Christchurch BH23 1AB"
+                className={input}
+              />
+            )}
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="location-mode"
+                checked={f.locationMode === "client"}
+                onChange={() => set("locationMode", "client")}
+                className="accent-teal-600"
+              />
+              At the client&apos;s location
+            </label>
+            {f.locationMode === "client" && (
+              <span className="block pl-6 text-[11px] text-neutral-500">
+                The client enters their address when booking; it becomes the invite&apos;s location.
+              </span>
+            )}
+          </div>
         )}
         {f.inPerson && f.addMeet && (
           <span className="mt-1 block text-[11px] text-neutral-500">
@@ -527,6 +562,7 @@ export default function BookingsManager({
     addMeet: true,
     inPerson: false,
     location: "",
+    locationMode: "host",
   };
 
   const section = "rounded-2xl border border-black/10 p-4 dark:border-white/10";
@@ -671,6 +707,7 @@ export default function BookingsManager({
                       addMeet: l.addMeet,
                       inPerson: l.inPerson,
                       location: l.location ?? "",
+                      locationMode: l.locationMode,
                     }}
                     submitLabel="Save"
                     onCancel={() => setEditingId(null)}
@@ -689,7 +726,7 @@ export default function BookingsManager({
                       <span className="font-medium">{l.title}</span>
                       <span className="text-xs text-neutral-500">
                         {lengthLabel(l.lengthKind, l.durationMin)}
-                        {l.inPerson ? " · In person" : ""}
+                        {l.inPerson ? (l.locationMode === "client" ? " · At client's location" : " · In person") : ""}
                         {l.addMeet ? " · Meet" : ""} · from {emailOf(l.calendarAccountId)}
                       </span>
                       {!l.active && (
@@ -753,6 +790,9 @@ export default function BookingsManager({
                   <div className="text-xs text-neutral-500">
                     {b.guestName} · {b.guestEmail} · {linkTitle(b.linkId)}
                   </div>
+                  {b.guestLocation && (
+                    <div className="mt-0.5 text-xs text-neutral-600 dark:text-neutral-300">📍 {b.guestLocation}</div>
+                  )}
                   {b.notes && <div className="mt-0.5 text-xs text-neutral-600 dark:text-neutral-300">“{b.notes}”</div>}
                   {b.meetUrl && (
                     <a href={b.meetUrl} target="_blank" rel="noreferrer" className="text-xs text-teal-700 underline dark:text-teal-300">

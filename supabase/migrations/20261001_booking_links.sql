@@ -77,3 +77,12 @@ create policy "owner reads own bookings" on public.bookings
 alter table public.booking_links
   add column if not exists in_person boolean not null default false,
   add column if not exists location text;
+
+-- 2026-10-02: in-person at the CLIENT's location. location_mode 'host' uses
+-- booking_links.location; 'client' asks the guest for their address at booking
+-- time (stored on the booking and used as the Google event location).
+alter table public.booking_links
+  add column if not exists location_mode text not null default 'host'
+  check (location_mode in ('host', 'client'));
+alter table public.bookings
+  add column if not exists guest_location text;

@@ -275,6 +275,8 @@ export async function freeSlotsForLink(admin: Admin, link: BookingLink): Promise
 export async function createBookingEvent(opts: {
   refreshToken: string;
   link: Pick<BookingLink, "title" | "add_meet" | "description" | "in_person" | "location">;
+  /** Overrides the link's address, e.g. the client's own address. */
+  location?: string | null;
   startIso: string;
   endIso: string;
   guestName: string;
@@ -297,7 +299,7 @@ export async function createBookingEvent(opts: {
       summary: `${opts.link.title} with ${opts.guestName}`,
       description: description || undefined,
       // In person: the address becomes the event location (Google shows a map link).
-      location: opts.link.in_person && opts.link.location ? opts.link.location : undefined,
+      location: opts.link.in_person ? (opts.location ?? opts.link.location ?? undefined) : undefined,
       start: { dateTime: opts.startIso, timeZone: APP_TIMEZONE },
       end: { dateTime: opts.endIso, timeZone: APP_TIMEZONE },
       attendees: [{ email: opts.guestEmail, displayName: opts.guestName }],
@@ -353,6 +355,7 @@ export type LinkInput = {
   add_meet?: boolean;
   in_person?: boolean;
   location?: string | null;
+  location_mode?: "host" | "client";
   active?: boolean;
 };
 
@@ -438,7 +441,13 @@ export function parseLinkInput(body: unknown): { input: LinkInput; error: string
   if ("location" in b)
     input.location =
       typeof b.location === "string" ? b.location.trim().slice(0, 300) || null : null;
-  if (input.in_person && "location" in b && !input.location)
+  if ("location_mode" in b) {
+    if (b.location_mode !== "host" && b.location_mode !== "client")
+      return fail("Unknown meeting location.");
+    input.location_mode = b.location_mode;
+  }
+  // Your own address is needed unless the client gives theirs when booking.
+  if (input.in_person && input.location_mode !== "client" && "location" in b && !input.location)
     return fail("Add the address for in-person meetings.");
   if ("active" in b) input.active = Boolean(b.active);
   return { input, error: null };

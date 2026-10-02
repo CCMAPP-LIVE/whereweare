@@ -29,6 +29,8 @@ export async function POST(request: Request, { params }: Params) {
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase().slice(0, 200) : "";
   const notes =
     typeof body.notes === "string" ? body.notes.trim().slice(0, 1000) || null : null;
+  const guestLocation =
+    typeof body.location === "string" ? body.location.trim().slice(0, 300) || null : null;
   const startMs = typeof body.start === "string" ? Date.parse(body.start) : NaN;
 
   if (!name) return NextResponse.json({ error: "Please enter your name." }, { status: 400 });
@@ -45,6 +47,11 @@ export async function POST(request: Request, { params }: Params) {
     .eq("active", true)
     .maybeSingle();
   if (!link) return NextResponse.json({ error: "This booking link isn't available." }, { status: 404 });
+
+  // In person at the client's location: they must tell us where.
+  const atClient = link.in_person && link.location_mode === "client";
+  if (atClient && (!guestLocation || guestLocation.length < 5))
+    return NextResponse.json({ error: "Please enter the address for the meeting." }, { status: 400 });
 
   const host = await hostAccountFor(admin, link);
   if (!host)
@@ -90,6 +97,7 @@ export async function POST(request: Request, { params }: Params) {
       guest_name: name,
       guest_email: email,
       notes,
+      guest_location: atClient ? guestLocation : null,
     })
     .select("id")
     .single();
@@ -115,6 +123,7 @@ export async function POST(request: Request, { params }: Params) {
       guestName: name,
       guestEmail: email,
       notes,
+      location: atClient ? guestLocation : null,
       requestId: booking.id,
     });
     await admin
@@ -127,6 +136,7 @@ export async function POST(request: Request, { params }: Params) {
       end: endIso,
       meetUrl,
       hostEmail: host.email,
+      location: link.in_person ? (atClient ? guestLocation : link.location) : null,
     });
   } catch {
     // Release the slot so the failure doesn't leave a ghost booking.

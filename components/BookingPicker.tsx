@@ -18,7 +18,8 @@ type Props = {
   dayStartHm: string; // window start in London time, e.g. "09:00" — marks the morning half
   addMeet: boolean;
   inPerson: boolean;
-  location: string | null;
+  location: string | null; // your address (null when meeting at the client's)
+  atClientLocation: boolean; // in person, at an address the client gives
   slots: string[]; // ISO start times (UTC)
   unavailable: boolean;
 };
@@ -49,7 +50,13 @@ function fmt(iso: string, tz: string, opts: Intl.DateTimeFormatOptions): string 
   return new Intl.DateTimeFormat("en-GB", { timeZone: tz, ...opts }).format(new Date(iso));
 }
 
-type Result = { start: string; end: string; meetUrl: string | null; hostEmail: string | null };
+type Result = {
+  start: string;
+  end: string;
+  meetUrl: string | null;
+  hostEmail: string | null;
+  location: string | null;
+};
 
 export default function BookingPicker({
   slug,
@@ -65,6 +72,7 @@ export default function BookingPicker({
   addMeet,
   inPerson,
   location,
+  atClientLocation,
   slots,
   unavailable,
 }: Props) {
@@ -75,6 +83,7 @@ export default function BookingPicker({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [notes, setNotes] = useState("");
+  const [address, setAddress] = useState("");
   const [website, setWebsite] = useState(""); // honeypot
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -118,7 +127,14 @@ export default function BookingPicker({
       const res = await fetch(`/api/book/${encodeURIComponent(slug)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ start: chosen, name, email, notes, website }),
+        body: JSON.stringify({
+          start: chosen,
+          name,
+          email,
+          notes,
+          website,
+          location: atClientLocation ? address : undefined,
+        }),
       });
       const json = await res.json().catch(() => ({}));
       if (res.ok && json.ok) {
@@ -148,8 +164,8 @@ export default function BookingPicker({
         {lengthLabel}
         {inPerson
           ? addMeet
-            ? " · In person (Google Meet link included)"
-            : " · In person"
+            ? ` · In person${atClientLocation ? " at your location" : ""} (Google Meet link included)`
+            : ` · In person${atClientLocation ? " at your location" : ""}`
           : addMeet
             ? " · Google Meet"
             : ""}
@@ -191,9 +207,9 @@ export default function BookingPicker({
             A calendar invite{result.hostEmail ? ` from ${result.hostEmail}` : ""} is on its way to{" "}
             {email}.
           </p>
-          {inPerson && location && (
+          {result.location && (
             <p className="mt-2 text-sm">
-              Where: <span className="font-medium">{location}</span>
+              Where: <span className="font-medium">{result.location}</span>
             </p>
           )}
           {result.meetUrl && (
@@ -326,6 +342,18 @@ export default function BookingPicker({
                 autoComplete="email"
                 className="w-full rounded-lg border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
               />
+              {atClientLocation && (
+                <textarea
+                  required
+                  minLength={5}
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="Address for the meeting (where should we come to?)"
+                  autoComplete="street-address"
+                  rows={2}
+                  className="w-full rounded-lg border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+                />
+              )}
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
