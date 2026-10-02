@@ -3,6 +3,7 @@
 import { useMemo, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import AccountLogo from "@/components/AccountLogo";
+import type { LengthKind } from "@/lib/bookingLength";
 
 type Props = {
   slug: string;
@@ -13,6 +14,8 @@ type Props = {
   logoUrl: string | null;
   lengthLabel: string; // "30 min", "Half day", "Whole day"
   durationMin: number; // actual length, used to show ranges on long slots
+  lengthKind: LengthKind;
+  dayStartHm: string; // window start in London time, e.g. "09:00" — marks the morning half
   addMeet: boolean;
   slots: string[]; // ISO start times (UTC)
   unavailable: boolean;
@@ -55,6 +58,8 @@ export default function BookingPicker({
   logoUrl,
   lengthLabel,
   durationMin,
+  lengthKind,
+  dayStartHm,
   addMeet,
   slots,
   unavailable,
@@ -85,17 +90,31 @@ export default function BookingPicker({
 
   const days = [...byDay.keys()];
   const activeDay = day && byDay.has(day) ? day : (days[0] ?? null);
+  // A whole day has exactly one slot per day, so picking the day IS picking
+  // the slot — no separate "pick a time" step.
+  const isFullDay = lengthKind === "full_day";
+  const chosen = isFullDay ? (activeDay ? byDay.get(activeDay)![0] : null) : slot;
+  const endOf = (iso: string) => new Date(Date.parse(iso) + durationMin * 60_000).toISOString();
+  const range = (iso: string, zone: string) =>
+    `${fmt(iso, zone, { hour: "2-digit", minute: "2-digit" })}–${fmt(endOf(iso), zone, {
+      hour: "2-digit",
+      minute: "2-digit",
+    })}`;
+  const halfOf = (iso: string) =>
+    fmt(iso, "Europe/London", { hour: "2-digit", minute: "2-digit" }) === dayStartHm
+      ? "Morning"
+      : "Afternoon";
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!slot) return;
+    if (!chosen) return;
     setBusy(true);
     setError(null);
     try {
       const res = await fetch(`/api/book/${encodeURIComponent(slug)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ start: slot, name, email, notes, website }),
+        body: JSON.stringify({ start: chosen, name, email, notes, website }),
       });
       const json = await res.json().catch(() => ({}));
       if (res.ok && json.ok) {
@@ -209,12 +228,19 @@ export default function BookingPicker({
             </div>
           </section>
 
-          {activeDay && (
+          {activeDay && !isFullDay && (
             <section className="mb-4">
               <h2 className="mb-2 text-xs font-medium uppercase text-neutral-400">
-                Pick a time <span className="normal-case">({tz})</span>
+                {lengthKind === "half_day" ? "Morning or afternoon?" : "Pick a time"}{" "}
+                <span className="normal-case">({tz})</span>
               </h2>
-              <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4">
+              <div
+                className={
+                  lengthKind === "half_day"
+                    ? "grid grid-cols-2 gap-1.5 sm:max-w-sm"
+                    : "grid grid-cols-3 gap-1.5 sm:grid-cols-4"
+                }
+              >
                 {byDay.get(activeDay)!.map((s) => (
                   <button
                     key={s}
@@ -227,26 +253,33 @@ export default function BookingPicker({
                         : "border-black/10 hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10")
                     }
                   >
-                    {fmt(s, tz, { hour: "2-digit", minute: "2-digit" })}
-                    {durationMin >= 120 &&
-                      `–${fmt(new Date(Date.parse(s) + durationMin * 60_000).toISOString(), tz, {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}`}
+                    {lengthKind === "half_day" ? (
+                      <>
+                        <span className="block font-medium">{halfOf(s)}</span>
+                        <span className="block text-xs opacity-80">{range(s, tz)}</span>
+                      </>
+                    ) : durationMin >= 120 ? (
+                      range(s, tz)
+                    ) : (
+                      fmt(s, tz, { hour: "2-digit", minute: "2-digit" })
+                    )}
                   </button>
                 ))}
               </div>
             </section>
           )}
 
-          {slot && (
+          {chosen && (
             <form
               onSubmit={submit}
               className="space-y-2 rounded-2xl border border-black/10 p-4 dark:border-white/10"
             >
               <p className="text-sm font-medium">
-                {fmt(slot, tz, { weekday: "long", day: "numeric", month: "long" })} at{" "}
-                {fmt(slot, tz, { hour: "2-digit", minute: "2-digit" })}
+                {fmt(chosen, tz, { weekday: "long", day: "numeric", month: "long" })}
+                {durationMin >= 120
+                  ? ` · ${range(chosen, tz)}`
+                  : ` at ${fmt(chosen, tz, { hour: "2-digit", minute: "2-digit" })}`}
+                {isFullDay && <span className="font-normal text-neutral-500"> ({tz})</span>}
               </p>
               <input
                 required

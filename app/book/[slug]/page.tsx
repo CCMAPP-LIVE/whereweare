@@ -7,6 +7,7 @@ import {
   linkLengthLabel,
 } from "@/lib/booking";
 import BookingPicker from "@/components/BookingPicker";
+import { asLengthKind } from "@/lib/bookingLength";
 
 export const dynamic = "force-dynamic";
 
@@ -76,6 +77,8 @@ export default async function BookPage({ params }: Params) {
       logoUrl={host?.logoUrl ?? null}
       lengthLabel={linkLengthLabel(link)}
       durationMin={linkDurationMin(link)}
+      lengthKind={asLengthKind(link.length_kind)}
+      dayStartHm={link.day_start.slice(0, 5)}
       addMeet={link.add_meet}
       slots={slots}
       unavailable={unavailable}
