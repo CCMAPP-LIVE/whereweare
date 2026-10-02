@@ -9,7 +9,8 @@ type Props = {
   description: string | null;
   hostName: string;
   hostEmail: string | null;
-  durationMin: number;
+  lengthLabel: string; // "30 min", "Half day", "Whole day"
+  durationMin: number; // actual length, used to show ranges on long slots
   addMeet: boolean;
   slots: string[]; // ISO start times (UTC)
   unavailable: boolean;
@@ -49,6 +50,7 @@ export default function BookingPicker({
   description,
   hostName,
   hostEmail,
+  lengthLabel,
   durationMin,
   addMeet,
   slots,
@@ -114,7 +116,8 @@ export default function BookingPicker({
       {hostName && <p className="text-sm text-neutral-500">{hostName}</p>}
       <h1 className="text-2xl font-semibold">{title}</h1>
       <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-300">
-        {durationMin} min{addMeet ? " · Google Meet" : ""}
+        {lengthLabel}
+        {addMeet ? " · Google Meet" : ""}
         {hostEmail ? ` · invite from ${hostEmail}` : ""}
       </p>
       {description && (
@@ -219,6 +222,11 @@ export default function BookingPicker({
                     }
                   >
                     {fmt(s, tz, { hour: "2-digit", minute: "2-digit" })}
+                    {durationMin >= 120 &&
+                      `–${fmt(new Date(Date.parse(s) + durationMin * 60_000).toISOString(), tz, {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}`}
                   </button>
                 ))}
               </div>

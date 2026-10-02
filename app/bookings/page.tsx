@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { siteUrl } from "@/lib/env";
 import { canSendInvites, isMissingTable } from "@/lib/booking";
 import NavBar from "@/components/NavBar";
+import { asLengthKind } from "@/lib/bookingLength";
 import BookingsManager, {
   type ManagedAccount,
   type ManagedBooking,
@@ -62,6 +63,7 @@ export default async function BookingsPage() {
     description: l.description,
     hostName: l.host_name,
     durationMin: l.duration_min,
+    lengthKind: asLengthKind(l.length_kind),
     weekdays: l.weekdays,
     dayStart: l.day_start.slice(0, 5),
     dayEnd: l.day_end.slice(0, 5),

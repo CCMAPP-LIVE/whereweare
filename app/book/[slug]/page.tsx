@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { freeSlotsForLink, hostAccountFor } from "@/lib/booking";
+import {
+  freeSlotsForLink,
+  hostAccountFor,
+  linkDurationMin,
+  linkLengthLabel,
+} from "@/lib/booking";
 import BookingPicker from "@/components/BookingPicker";
 
 export const dynamic = "force-dynamic";
@@ -68,7 +73,8 @@ export default async function BookPage({ params }: Params) {
       description={link.description}
       hostName={hostName}
       hostEmail={host?.email ?? null}
-      durationMin={link.duration_min}
+      lengthLabel={linkLengthLabel(link)}
+      durationMin={linkDurationMin(link)}
       addMeet={link.add_meet}
       slots={slots}
       unavailable={unavailable}

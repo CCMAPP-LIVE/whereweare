@@ -6,6 +6,7 @@ import type { Database } from "@/lib/database.types";
 import { googleUserAuth } from "@/lib/google/auth";
 import { APP_TIMEZONE } from "@/lib/constants";
 import { londonToday } from "@/lib/time";
+import { asLengthKind, lengthLabel, type LengthKind } from "@/lib/bookingLength";
 
 type Admin = SupabaseClient<Database>;
 export type BookingLink = Database["public"]["Tables"]["booking_links"]["Row"];
@@ -177,32 +178,52 @@ export function linkWindow(link: Pick<BookingLink, "max_days_ahead">, nowMs: num
   };
 }
 
+type LengthFields = Pick<BookingLink, "duration_min" | "day_start" | "day_end"> & {
+  length_kind?: string | null;
+};
+
+function hmToMinutes(hm: string): number {
+  const [h, m] = hm.slice(0, 5).split(":").map(Number);
+  return h * 60 + m;
+}
+
+/**
+ * Meeting length in minutes. "Half day" is half the link's hours (9–5 → 4h)
+ * and "whole day" the full window, so they follow the hours you set.
+ */
+export function linkDurationMin(link: LengthFields): number {
+  const span = hmToMinutes(link.day_end) - hmToMinutes(link.day_start);
+  if (link.length_kind === "full_day") return span;
+  if (link.length_kind === "half_day") return Math.floor(span / 2);
+  return link.duration_min;
+}
+
+/** Human label for the length, e.g. "30 min", "Half day", "Whole day". */
+export function linkLengthLabel(link: LengthFields): string {
+  return lengthLabel(asLengthKind(link.length_kind), link.duration_min);
+}
+
 /**
  * Free start times (ISO, UTC) for a link: its weekdays and hours in London
  * time, past the minimum notice, clear of busy time plus the buffer on both
- * sides. Starts step every 30 minutes (or the meeting length if shorter).
+ * sides. Minute-length meetings start every 30 minutes (or the meeting length
+ * if shorter); half days offer only the morning and afternoon halves, and a
+ * whole day only the start of the window.
  */
 export function computeSlots(
-  link: Pick<
-    BookingLink,
-    | "duration_min"
-    | "weekdays"
-    | "day_start"
-    | "day_end"
-    | "min_notice_hours"
-    | "max_days_ahead"
-    | "buffer_min"
-  >,
+  link: LengthFields &
+    Pick<BookingLink, "weekdays" | "min_notice_hours" | "max_days_ahead" | "buffer_min">,
   busy: Interval[],
   nowMs: number,
 ): string[] {
-  const dur = link.duration_min * 60_000;
+  const durMin = linkDurationMin(link);
+  const dur = durMin * 60_000;
   const buf = link.buffer_min * 60_000;
-  const step = Math.min(link.duration_min, 30) * 60_000;
   const cutoff = nowMs + link.min_notice_hours * 3_600_000;
   const today = parseISO(`${londonToday()}T12:00:00`);
   const startHm = link.day_start.slice(0, 5);
   const endHm = link.day_end.slice(0, 5);
+  if (dur <= 0) return [];
 
   const slots: string[] = [];
   for (let d = 0; d <= link.max_days_ahead; d++) {
@@ -212,8 +233,18 @@ export function computeSlots(
     const key = format(date, "yyyy-MM-dd");
     const dayStart = fromZonedTime(`${key}T${startHm}:00`, APP_TIMEZONE).getTime();
     const dayEnd = fromZonedTime(`${key}T${endHm}:00`, APP_TIMEZONE).getTime();
-    for (let t = dayStart; t + dur <= dayEnd; t += step) {
-      if (t < cutoff) continue;
+
+    let starts: number[];
+    if (link.length_kind === "full_day") starts = [dayStart];
+    else if (link.length_kind === "half_day") starts = [dayStart, dayStart + dur];
+    else {
+      const step = Math.min(durMin, 30) * 60_000;
+      starts = [];
+      for (let t = dayStart; t + dur <= dayEnd; t += step) starts.push(t);
+    }
+
+    for (const t of starts) {
+      if (t < cutoff || t + dur > dayEnd) continue;
       const clash = busy.some((b) => b.start < t + dur + buf && b.end > t - buf);
       if (!clash) slots.push(new Date(t).toISOString());
     }
@@ -303,6 +334,7 @@ export type LinkInput = {
   description?: string | null;
   host_name?: string | null;
   duration_min?: number;
+  length_kind?: LengthKind;
   weekdays?: number[];
   day_start?: string;
   day_end?: string;
@@ -353,6 +385,11 @@ export function parseLinkInput(body: unknown): { input: LinkInput; error: string
     const v = intIn(b.duration_min, 10, 240);
     if (v === undefined) return fail("Meeting length must be 10–240 minutes.");
     input.duration_min = v;
+  }
+  if ("length_kind" in b) {
+    if (b.length_kind !== "minutes" && b.length_kind !== "half_day" && b.length_kind !== "full_day")
+      return fail("Unknown meeting length.");
+    input.length_kind = b.length_kind;
   }
   if ("weekdays" in b) {
     const days = Array.isArray(b.weekdays)

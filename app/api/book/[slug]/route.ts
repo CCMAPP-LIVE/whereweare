@@ -5,6 +5,7 @@ import {
   computeSlots,
   createBookingEvent,
   hostAccountFor,
+  linkDurationMin,
 } from "@/lib/booking";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -52,8 +53,9 @@ export async function POST(request: Request, { params }: Params) {
       { status: 503 },
     );
 
+  const durMs = linkDurationMin(link) * 60_000;
   const startIso = new Date(startMs).toISOString();
-  const endIso = new Date(startMs + link.duration_min * 60_000).toISOString();
+  const endIso = new Date(startMs + durMs).toISOString();
   const pad = (link.buffer_min + 1) * 60_000;
 
   // Is this start still a valid, free slot under the link's rules?
@@ -64,7 +66,7 @@ export async function POST(request: Request, { params }: Params) {
       link.user_id,
       link.calendar_account_id,
       new Date(startMs - pad).toISOString(),
-      new Date(startMs + link.duration_min * 60_000 + pad).toISOString(),
+      new Date(startMs + durMs + pad).toISOString(),
     );
   } catch {
     return NextResponse.json(

@@ -101,6 +101,7 @@ export type Database = {
           duration_min: number
           host_name: string | null
           id: string
+          length_kind: string
           max_days_ahead: number
           min_notice_hours: number
           slug: string
@@ -121,6 +122,7 @@ export type Database = {
           duration_min?: number
           host_name?: string | null
           id?: string
+          length_kind?: string
           max_days_ahead?: number
           min_notice_hours?: number
           slug: string
@@ -141,6 +143,7 @@ export type Database = {
           duration_min?: number
           host_name?: string | null
           id?: string
+          length_kind?: string
           max_days_ahead?: number
           min_notice_hours?: number
           slug?: string

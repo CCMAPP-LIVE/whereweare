@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { asLengthKind, lengthLabel, type LengthKind } from "@/lib/bookingLength";
 
 export type ManagedAccount = { id: string; email: string; canInvite: boolean };
 
@@ -12,6 +13,7 @@ export type ManagedLink = {
   description: string | null;
   hostName: string | null;
   durationMin: number;
+  lengthKind: LengthKind;
   weekdays: number[];
   dayStart: string;
   dayEnd: string;
@@ -34,7 +36,7 @@ export type ManagedBooking = {
 };
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const DURATIONS = [15, 20, 30, 45, 60, 90];
+const DURATIONS = [15, 20, 30, 45, 60, 90, 120];
 const TIMES = Array.from({ length: 33 }, (_, i) => {
   const mins = 6 * 60 + i * 30; // 06:00 – 22:00
   return `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
@@ -58,6 +60,7 @@ type FormState = {
   description: string;
   hostName: string;
   durationMin: number;
+  lengthKind: LengthKind;
   weekdays: number[];
   dayStart: string;
   dayEnd: string;
@@ -75,6 +78,7 @@ function toPayload(f: FormState) {
     description: f.description,
     host_name: f.hostName,
     duration_min: f.durationMin,
+    length_kind: f.lengthKind,
     weekdays: f.weekdays,
     day_start: f.dayStart,
     day_end: f.dayEnd,
@@ -93,6 +97,7 @@ type ApiLink = {
   description: string | null;
   host_name: string | null;
   duration_min: number;
+  length_kind: string;
   weekdays: number[];
   day_start: string;
   day_end: string;
@@ -112,6 +117,7 @@ function fromApi(l: ApiLink): ManagedLink {
     description: l.description,
     hostName: l.host_name,
     durationMin: l.duration_min,
+    lengthKind: asLengthKind(l.length_kind),
     weekdays: l.weekdays,
     dayStart: l.day_start.slice(0, 5),
     dayEnd: l.day_end.slice(0, 5),
@@ -225,16 +231,29 @@ function LinkForm({
         <label className="block">
           <span className={label}>Length</span>
           <select
-            value={f.durationMin}
-            onChange={(e) => set("durationMin", Number(e.target.value))}
+            value={f.lengthKind === "minutes" ? String(f.durationMin) : f.lengthKind}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === "half_day" || v === "full_day") set("lengthKind", v);
+              else setF((cur) => ({ ...cur, lengthKind: "minutes", durationMin: Number(v) }));
+            }}
             className={input}
           >
             {DURATIONS.map((d) => (
               <option key={d} value={d}>
-                {d} min
+                {lengthLabel("minutes", d)}
               </option>
             ))}
+            <option value="half_day">Half day</option>
+            <option value="full_day">Whole day</option>
           </select>
+          {f.lengthKind !== "minutes" && (
+            <span className="mt-1 block text-[11px] text-neutral-500">
+              {f.lengthKind === "half_day"
+                ? "Morning or afternoon half of the hours below."
+                : "The whole of the hours below."}
+            </span>
+          )}
         </label>
         <label className="block">
           <span className={label}>From</span>
@@ -427,6 +446,7 @@ export default function BookingsManager({
     description: "",
     hostName: "",
     durationMin: 30,
+    lengthKind: "minutes",
     weekdays: [0, 1, 2, 3, 4],
     dayStart: "09:00",
     dayEnd: "17:00",
@@ -538,6 +558,7 @@ export default function BookingsManager({
                       description: l.description ?? "",
                       hostName: l.hostName ?? "",
                       durationMin: l.durationMin,
+                      lengthKind: l.lengthKind,
                       weekdays: l.weekdays,
                       dayStart: l.dayStart,
                       dayEnd: l.dayEnd,
@@ -562,7 +583,7 @@ export default function BookingsManager({
                     <div className="flex flex-wrap items-baseline gap-x-2">
                       <span className="font-medium">{l.title}</span>
                       <span className="text-xs text-neutral-500">
-                        {l.durationMin} min · from {emailOf(l.calendarAccountId)}
+                        {lengthLabel(l.lengthKind, l.durationMin)} · from {emailOf(l.calendarAccountId)}
                       </span>
                       {!l.active && (
                         <span className="rounded-full bg-neutral-200 px-2 py-0.5 text-[10px] uppercase text-neutral-600 dark:bg-neutral-700 dark:text-neutral-300">

@@ -42,6 +42,12 @@ create table if not exists public.bookings (
   created_at timestamptz not null default now()
 );
 
+-- 2026-10-02: meeting length can also be "half day" (morning or afternoon of
+-- the link's hours) or "full day" (the whole window) instead of N minutes.
+alter table public.booking_links
+  add column if not exists length_kind text not null default 'minutes'
+  check (length_kind in ('minutes', 'half_day', 'full_day'));
+
 -- Two people racing for the same slot on the same link: only one wins.
 create unique index if not exists bookings_one_per_slot
   on public.bookings (link_id, start_at)
