@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "MeYouWhen",
   applicationName: "MeYouWhen",
+  description: "Pick a time that suits you.",
+  appleWebApp: { title: "MeYouWhen" },
   robots: { index: false, follow: false },
 };
 

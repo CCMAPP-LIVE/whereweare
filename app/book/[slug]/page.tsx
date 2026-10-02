@@ -30,6 +30,8 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   return {
     title: link ? `Book: ${link.title}` : "Booking",
     applicationName: "MeYouWhen",
+    description: "Pick a time that suits you.",
+    appleWebApp: { title: "MeYouWhen" },
     robots: { index: false, follow: false },
   };
 }
