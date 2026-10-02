@@ -70,3 +70,10 @@ create policy "owner reads own bookings" on public.bookings
       where l.id = bookings.link_id and l.user_id = auth.uid()
     )
   );
+
+-- 2026-10-02: in-person meetings. Set by the link owner (the guest never
+-- chooses); the address becomes the Google event's location. Can be combined
+-- with add_meet for a hybrid meeting.
+alter table public.booking_links
+  add column if not exists in_person boolean not null default false,
+  add column if not exists location text;

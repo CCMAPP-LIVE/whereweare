@@ -27,6 +27,8 @@ export type ManagedLink = {
   maxDaysAhead: number;
   bufferMin: number;
   addMeet: boolean;
+  inPerson: boolean;
+  location: string | null;
   active: boolean;
 };
 
@@ -74,6 +76,8 @@ type FormState = {
   maxDaysAhead: number;
   bufferMin: number;
   addMeet: boolean;
+  inPerson: boolean;
+  location: string;
 };
 
 function toPayload(f: FormState) {
@@ -92,6 +96,8 @@ function toPayload(f: FormState) {
     max_days_ahead: f.maxDaysAhead,
     buffer_min: f.bufferMin,
     add_meet: f.addMeet,
+    in_person: f.inPerson,
+    location: f.location,
   };
 }
 
@@ -111,6 +117,8 @@ type ApiLink = {
   max_days_ahead: number;
   buffer_min: number;
   add_meet: boolean;
+  in_person: boolean;
+  location: string | null;
   active: boolean;
 };
 
@@ -131,6 +139,8 @@ function fromApi(l: ApiLink): ManagedLink {
     maxDaysAhead: l.max_days_ahead,
     bufferMin: l.buffer_min,
     addMeet: l.add_meet,
+    inPerson: l.in_person,
+    location: l.location,
     active: l.active,
   };
 }
@@ -348,15 +358,43 @@ function LinkForm({
             ))}
           </select>
         </label>
-        <label className="flex items-center gap-2 self-end pb-1.5 text-sm">
+      </div>
+
+      <div>
+        <span className={label}>Where</span>
+        <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={f.addMeet}
+              onChange={(e) => set("addMeet", e.target.checked)}
+              className="accent-teal-600"
+            />
+            Add Google Meet
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={f.inPerson}
+              onChange={(e) => set("inPerson", e.target.checked)}
+              className="accent-teal-600"
+            />
+            In person
+          </label>
+        </div>
+        {f.inPerson && (
           <input
-            type="checkbox"
-            checked={f.addMeet}
-            onChange={(e) => set("addMeet", e.target.checked)}
-            className="accent-teal-600"
+            value={f.location}
+            onChange={(e) => set("location", e.target.value)}
+            placeholder="Address, e.g. Brainshed, 12 High Street, Christchurch BH23 1AB"
+            className={`${input} mt-2`}
           />
-          Add Google Meet
-        </label>
+        )}
+        {f.inPerson && f.addMeet && (
+          <span className="mt-1 block text-[11px] text-neutral-500">
+            The invite will have the address and a Meet link, for anyone joining remotely.
+          </span>
+        )}
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
@@ -485,6 +523,8 @@ export default function BookingsManager({
     maxDaysAhead: 28,
     bufferMin: 10,
     addMeet: true,
+    inPerson: false,
+    location: "",
   };
 
   const section = "rounded-2xl border border-black/10 p-4 dark:border-white/10";
@@ -625,6 +665,8 @@ export default function BookingsManager({
                       maxDaysAhead: l.maxDaysAhead,
                       bufferMin: l.bufferMin,
                       addMeet: l.addMeet,
+                      inPerson: l.inPerson,
+                      location: l.location ?? "",
                     }}
                     submitLabel="Save"
                     onCancel={() => setEditingId(null)}
@@ -642,7 +684,9 @@ export default function BookingsManager({
                     <div className="flex flex-wrap items-baseline gap-x-2">
                       <span className="font-medium">{l.title}</span>
                       <span className="text-xs text-neutral-500">
-                        {lengthLabel(l.lengthKind, l.durationMin)} · from {emailOf(l.calendarAccountId)}
+                        {lengthLabel(l.lengthKind, l.durationMin)}
+                        {l.inPerson ? " · In person" : ""}
+                        {l.addMeet ? " · Meet" : ""} · from {emailOf(l.calendarAccountId)}
                       </span>
                       {!l.active && (
                         <span className="rounded-full bg-neutral-200 px-2 py-0.5 text-[10px] uppercase text-neutral-600 dark:bg-neutral-700 dark:text-neutral-300">

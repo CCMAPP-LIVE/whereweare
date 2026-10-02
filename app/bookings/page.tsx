@@ -72,6 +72,8 @@ export default async function BookingsPage() {
     maxDaysAhead: l.max_days_ahead,
     bufferMin: l.buffer_min,
     addMeet: l.add_meet,
+    inPerson: l.in_person,
+    location: l.location,
     active: l.active,
   }));
 

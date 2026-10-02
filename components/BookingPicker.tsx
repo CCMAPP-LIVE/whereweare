@@ -17,6 +17,8 @@ type Props = {
   lengthKind: LengthKind;
   dayStartHm: string; // window start in London time, e.g. "09:00" — marks the morning half
   addMeet: boolean;
+  inPerson: boolean;
+  location: string | null;
   slots: string[]; // ISO start times (UTC)
   unavailable: boolean;
 };
@@ -61,6 +63,8 @@ export default function BookingPicker({
   lengthKind,
   dayStartHm,
   addMeet,
+  inPerson,
+  location,
   slots,
   unavailable,
 }: Props) {
@@ -142,9 +146,28 @@ export default function BookingPicker({
       <h1 className="text-2xl font-semibold">{title}</h1>
       <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-300">
         {lengthLabel}
-        {addMeet ? " · Google Meet" : ""}
+        {inPerson
+          ? addMeet
+            ? " · In person (Google Meet link included)"
+            : " · In person"
+          : addMeet
+            ? " · Google Meet"
+            : ""}
         {hostEmail ? ` · invite from ${hostEmail}` : ""}
       </p>
+      {inPerson && location && (
+        <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-300">
+          📍{" "}
+          <a
+            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`}
+            target="_blank"
+            rel="noreferrer"
+            className="underline"
+          >
+            {location}
+          </a>
+        </p>
+      )}
       {description && (
         <p className="mt-3 whitespace-pre-line text-sm text-neutral-700 dark:text-neutral-200">
           {description}
@@ -168,6 +191,11 @@ export default function BookingPicker({
             A calendar invite{result.hostEmail ? ` from ${result.hostEmail}` : ""} is on its way to{" "}
             {email}.
           </p>
+          {inPerson && location && (
+            <p className="mt-2 text-sm">
+              Where: <span className="font-medium">{location}</span>
+            </p>
+          )}
           {result.meetUrl && (
             <p className="mt-2 text-sm">
               Meet link:{" "}

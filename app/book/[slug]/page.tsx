@@ -80,6 +80,8 @@ export default async function BookPage({ params }: Params) {
       lengthKind={asLengthKind(link.length_kind)}
       dayStartHm={link.day_start.slice(0, 5)}
       addMeet={link.add_meet}
+      inPerson={link.in_person}
+      location={link.in_person ? link.location : null}
       slots={slots}
       unavailable={unavailable}
     />

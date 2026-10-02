@@ -274,7 +274,7 @@ export async function freeSlotsForLink(admin: Admin, link: BookingLink): Promise
  */
 export async function createBookingEvent(opts: {
   refreshToken: string;
-  link: Pick<BookingLink, "title" | "add_meet" | "description">;
+  link: Pick<BookingLink, "title" | "add_meet" | "description" | "in_person" | "location">;
   startIso: string;
   endIso: string;
   guestName: string;
@@ -296,6 +296,8 @@ export async function createBookingEvent(opts: {
     requestBody: {
       summary: `${opts.link.title} with ${opts.guestName}`,
       description: description || undefined,
+      // In person: the address becomes the event location (Google shows a map link).
+      location: opts.link.in_person && opts.link.location ? opts.link.location : undefined,
       start: { dateTime: opts.startIso, timeZone: APP_TIMEZONE },
       end: { dateTime: opts.endIso, timeZone: APP_TIMEZONE },
       attendees: [{ email: opts.guestEmail, displayName: opts.guestName }],
@@ -349,6 +351,8 @@ export type LinkInput = {
   max_days_ahead?: number;
   buffer_min?: number;
   add_meet?: boolean;
+  in_person?: boolean;
+  location?: string | null;
   active?: boolean;
 };
 
@@ -430,6 +434,12 @@ export function parseLinkInput(body: unknown): { input: LinkInput; error: string
     input.buffer_min = v;
   }
   if ("add_meet" in b) input.add_meet = Boolean(b.add_meet);
+  if ("in_person" in b) input.in_person = Boolean(b.in_person);
+  if ("location" in b)
+    input.location =
+      typeof b.location === "string" ? b.location.trim().slice(0, 300) || null : null;
+  if (input.in_person && "location" in b && !input.location)
+    return fail("Add the address for in-person meetings.");
   if ("active" in b) input.active = Boolean(b.active);
   return { input, error: null };
 }
