@@ -73,6 +73,7 @@ export default async function BookPage({ params }: Params) {
       description={link.description}
       hostName={hostName}
       hostEmail={host?.email ?? null}
+      logoUrl={host?.logoUrl ?? null}
       lengthLabel={linkLengthLabel(link)}
       durationMin={linkDurationMin(link)}
       addMeet={link.add_meet}

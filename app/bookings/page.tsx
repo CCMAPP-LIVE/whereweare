@@ -25,7 +25,7 @@ export default async function BookingsPage() {
   // Your Google accounts, and whether each has granted invite permission.
   const { data: accountRows } = await admin
     .from("calendar_accounts")
-    .select("id, account_email")
+    .select("id, account_email, logo_url")
     .eq("user_id", user.id)
     .eq("provider", "google")
     .order("created_at");
@@ -43,6 +43,7 @@ export default async function BookingsPage() {
       return {
         id: a.id,
         email: a.account_email ?? "Google account",
+        logoUrl: a.logo_url,
         canInvite: token ? await canSendInvites(token) : false,
       };
     }),

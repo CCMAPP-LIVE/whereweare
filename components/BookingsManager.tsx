@@ -2,8 +2,14 @@
 
 import { useState } from "react";
 import { asLengthKind, lengthLabel, type LengthKind } from "@/lib/bookingLength";
+import AccountLogo from "@/components/AccountLogo";
 
-export type ManagedAccount = { id: string; email: string; canInvite: boolean };
+export type ManagedAccount = {
+  id: string;
+  email: string;
+  canInvite: boolean;
+  logoUrl: string | null;
+};
 
 export type ManagedLink = {
   id: string;
@@ -373,7 +379,7 @@ function LinkForm({
 
 export default function BookingsManager({
   baseUrl,
-  accounts,
+  accounts: initialAccounts,
   initialLinks,
   bookings: initialBookings,
   setupNeeded,
@@ -384,6 +390,8 @@ export default function BookingsManager({
   bookings: ManagedBooking[];
   setupNeeded: boolean;
 }) {
+  const [accounts, setAccounts] = useState(initialAccounts);
+  const [logoBusy, setLogoBusy] = useState<string | null>(null);
   const [links, setLinks] = useState(initialLinks);
   const [bookings, setBookings] = useState(initialBookings);
   const [creating, setCreating] = useState(initialLinks.length === 0);
@@ -404,6 +412,29 @@ export default function BookingsManager({
     return res.ok && json.ok
       ? { link: fromApi(json.link as ApiLink), error: null }
       : { link: null, error: (json.error as string) ?? "Couldn't save." };
+  }
+
+  async function uploadLogo(accountId: string, file: File) {
+    if (file.size > 2 * 1024 * 1024) return alert("Logo must be 2 MB or smaller.");
+    setLogoBusy(accountId);
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const res = await fetch(`/api/account-logo/${accountId}`, { method: "POST", body });
+      const json = await res.json().catch(() => ({}));
+      if (res.ok && json.ok)
+        setAccounts((cur) => cur.map((a) => (a.id === accountId ? { ...a, logoUrl: json.logoUrl } : a)));
+      else alert(json.error ?? "Couldn't upload that logo.");
+    } finally {
+      setLogoBusy(null);
+    }
+  }
+
+  async function removeLogo(accountId: string) {
+    setLogoBusy(accountId);
+    const res = await fetch(`/api/account-logo/${accountId}`, { method: "DELETE" });
+    if (res.ok) setAccounts((cur) => cur.map((a) => (a.id === accountId ? { ...a, logoUrl: null } : a)));
+    setLogoBusy(null);
   }
 
   async function copy(slug: string) {
@@ -484,7 +515,35 @@ export default function BookingsManager({
           <ul className="space-y-1.5">
             {accounts.map((a) => (
               <li key={a.id} className="flex flex-wrap items-center gap-2 text-sm">
+                <AccountLogo logoUrl={a.logoUrl} email={a.email} size="sm" />
                 <span className="min-w-0 flex-1 truncate">{a.email}</span>
+                <label
+                  className={
+                    "cursor-pointer text-xs text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200 " +
+                    (logoBusy === a.id ? "pointer-events-none opacity-50" : "")
+                  }
+                >
+                  {logoBusy === a.id ? "Uploading…" : a.logoUrl ? "Change logo" : "Upload logo"}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (file) uploadLogo(a.id, file);
+                    }}
+                  />
+                </label>
+                {a.logoUrl && (
+                  <button
+                    onClick={() => removeLogo(a.id)}
+                    disabled={logoBusy === a.id}
+                    className="text-xs text-neutral-400 hover:text-red-600"
+                  >
+                    Remove
+                  </button>
+                )}
                 {a.canInvite ? (
                   <span className="rounded-full bg-teal-100 px-2 py-0.5 text-[11px] text-teal-800 dark:bg-teal-900/40 dark:text-teal-200">
                     ✓ Can send invites

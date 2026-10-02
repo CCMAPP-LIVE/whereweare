@@ -25,12 +25,17 @@ export function isMissingTable(error: { code?: string } | null | undefined): boo
   return error?.code === "42P01" || error?.code === "PGRST205";
 }
 
-type GoogleAccount = { id: string; email: string | null; refreshToken: string };
+type GoogleAccount = {
+  id: string;
+  email: string | null;
+  logoUrl: string | null;
+  refreshToken: string;
+};
 
 async function googleAccountsForUser(admin: Admin, userId: string): Promise<GoogleAccount[]> {
   const { data: accounts } = await admin
     .from("calendar_accounts")
-    .select("id, account_email")
+    .select("id, account_email, logo_url")
     .eq("user_id", userId)
     .eq("provider", "google");
   if (!accounts?.length) return [];
@@ -44,7 +49,9 @@ async function googleAccountsForUser(admin: Admin, userId: string): Promise<Goog
   const tokenOf = new Map((tokens ?? []).map((t) => [t.calendar_account_id, t.refresh_token]));
   return accounts.flatMap((a) => {
     const refreshToken = tokenOf.get(a.id);
-    return refreshToken ? [{ id: a.id, email: a.account_email, refreshToken }] : [];
+    return refreshToken
+      ? [{ id: a.id, email: a.account_email, logoUrl: a.logo_url, refreshToken }]
+      : [];
   });
 }
 

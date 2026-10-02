@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
+import AccountLogo from "@/components/AccountLogo";
 
 type Props = {
   slug: string;
@@ -9,6 +10,7 @@ type Props = {
   description: string | null;
   hostName: string;
   hostEmail: string | null;
+  logoUrl: string | null;
   lengthLabel: string; // "30 min", "Half day", "Whole day"
   durationMin: number; // actual length, used to show ranges on long slots
   addMeet: boolean;
@@ -50,6 +52,7 @@ export default function BookingPicker({
   description,
   hostName,
   hostEmail,
+  logoUrl,
   lengthLabel,
   durationMin,
   addMeet,
@@ -113,6 +116,9 @@ export default function BookingPicker({
 
   const header = (
     <header className="mb-5">
+      <div className="mb-3">
+        <AccountLogo logoUrl={logoUrl} email={hostEmail} size="lg" />
+      </div>
       {hostName && <p className="text-sm text-neutral-500">{hostName}</p>}
       <h1 className="text-2xl font-semibold">{title}</h1>
       <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-300">

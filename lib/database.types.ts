@@ -201,6 +201,7 @@ export type Database = {
           account_email: string | null
           created_at: string
           id: string
+          logo_url: string | null
           provider: Database["public"]["Enums"]["calendar_provider"]
           updated_at: string
           user_id: string
@@ -209,6 +210,7 @@ export type Database = {
           account_email?: string | null
           created_at?: string
           id?: string
+          logo_url?: string | null
           provider: Database["public"]["Enums"]["calendar_provider"]
           updated_at?: string
           user_id: string
@@ -217,6 +219,7 @@ export type Database = {
           account_email?: string | null
           created_at?: string
           id?: string
+          logo_url?: string | null
           provider?: Database["public"]["Enums"]["calendar_provider"]
           updated_at?: string
           user_id?: string
