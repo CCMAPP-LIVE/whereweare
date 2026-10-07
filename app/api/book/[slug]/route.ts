@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushToUser } from "@/lib/push/send";
+import { escapeHtml, sendEmail } from "@/lib/email";
+import { siteUrl } from "@/lib/env";
 import { isRealUkPostcode, normaliseUkPostcode } from "@/lib/postcode";
 import {
   busyForUser,
@@ -150,31 +152,65 @@ export async function POST(request: Request, { params }: Params) {
       .update({ google_event_id: eventId, meet_url: meetUrl })
       .eq("id", booking.id);
 
-    // Tell the link's owner straight away (phone/desktop push). Best-effort:
+    // Tell the link's owner straight away: phone/desktop push, plus an email to
+    // the account the link sends from (reply goes to the client). Best-effort:
     // a notification failure must never undo a confirmed booking.
-    try {
-      const when = new Intl.DateTimeFormat("en-GB", {
+    const when = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/London",
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+    }).format(new Date(startIso));
+    const hm = (iso: string) =>
+      new Intl.DateTimeFormat("en-GB", {
         timeZone: "Europe/London",
-        weekday: "short",
-        day: "numeric",
-        month: "short",
-      }).format(new Date(startIso));
-      const hm = (iso: string) =>
-        new Intl.DateTimeFormat("en-GB", {
-          timeZone: "Europe/London",
-          hour: "2-digit",
-          minute: "2-digit",
-        }).format(new Date(iso));
-      await sendPushToUser(admin, link.user_id, {
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(new Date(iso));
+    const whenRange = `${when}, ${hm(startIso)}–${hm(endIso)}`;
+    const where = link.in_person ? (atClient ? guestLocation : link.location) : null;
+
+    const rows: [string, string][] = [
+      ["When", `${whenRange} (UK time)`],
+      ["Client", name],
+      ["Email", email],
+      ...(where ? ([["Where", where]] as [string, string][]) : []),
+      ...(meetUrl ? ([["Google Meet", meetUrl]] as [string, string][]) : []),
+      ...(notes ? ([["Notes", notes]] as [string, string][]) : []),
+    ];
+    const bookingsUrl = `${siteUrl()}/bookings`;
+
+    await Promise.allSettled([
+      sendPushToUser(admin, link.user_id, {
         title: `New booking: ${name}`,
-        body: `${link.title} — ${when}, ${hm(startIso)}–${hm(endIso)}${
-          atClient && guestLocation ? ` · ${guestLocation}` : ""
-        }`,
+        body: `${link.title} — ${whenRange}${where && atClient ? ` · ${where}` : ""}`,
         url: "/bookings",
-      });
-    } catch {
-      // ignore
-    }
+      }),
+      host.email
+        ? sendEmail({
+            to: host.email,
+            replyTo: email,
+            subject: `New booking: ${name} — ${link.title}, ${whenRange}`,
+            text: [
+              `New booking for ${link.title}`,
+              "",
+              ...rows.map(([k, v]) => `${k}: ${v}`),
+              "",
+              `It's in your calendar. Manage bookings: ${bookingsUrl}`,
+            ].join("\n"),
+            html: `<div style="font-family:system-ui,sans-serif;font-size:15px;color:#171717">
+<p style="margin:0 0 12px">New booking for <strong>${escapeHtml(link.title)}</strong></p>
+<table cellpadding="6" style="border-collapse:collapse">${rows
+              .map(
+                ([k, v]) =>
+                  `<tr><td style="color:#737373;vertical-align:top">${escapeHtml(k)}</td><td style="white-space:pre-line">${escapeHtml(v)}</td></tr>`,
+              )
+              .join("")}</table>
+<p style="margin:16px 0 0;color:#737373;font-size:13px">It's in your calendar. <a href="${bookingsUrl}">Manage bookings</a> · Reply to this email to contact ${escapeHtml(name)}.</p>
+</div>`,
+          })
+        : Promise.resolve(false),
+    ]);
     return NextResponse.json({
       ok: true,
       start: startIso,
