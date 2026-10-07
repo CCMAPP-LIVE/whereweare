@@ -477,6 +477,27 @@ export default function BookingsManager({
   const [creating, setCreating] = useState(initialLinks.length === 0);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [testTo, setTestTo] = useState("");
+  const [testState, setTestState] = useState<{ busy: boolean; msg: string | null; ok: boolean }>({
+    busy: false,
+    msg: null,
+    ok: false,
+  });
+
+  async function sendTestEmail() {
+    setTestState({ busy: true, msg: null, ok: false });
+    const res = await fetch("/api/email-test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to: testTo }),
+    });
+    const json = await res.json().catch(() => ({}));
+    setTestState({
+      busy: false,
+      ok: res.ok && json.ok,
+      msg: res.ok && json.ok ? `Sent to ${testTo} — check the inbox (and spam).` : (json.error ?? "Couldn't send."),
+    });
+  }
 
   const urlFor = (slug: string) => `${bookingBase}/${slug}`;
   const emailOf = (accountId: string) => accounts.find((a) => a.id === accountId)?.email ?? "—";
@@ -775,6 +796,40 @@ export default function BookingsManager({
               </li>
             ))}
           </ul>
+        )}
+      </section>
+
+      <section className={section}>
+        <h2 className="mb-1 font-semibold">Booking emails</h2>
+        <p className="mb-2 text-sm text-neutral-500">
+          Each booking emails the account the link sends from (reply goes to the client). Send a test to check.
+        </p>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            sendTestEmail();
+          }}
+          className="flex flex-wrap gap-2"
+        >
+          <input
+            type="email"
+            required
+            value={testTo}
+            onChange={(e) => setTestTo(e.target.value)}
+            placeholder="you@example.com"
+            className="min-w-0 flex-1 rounded-lg border border-black/10 bg-transparent px-2 py-1.5 text-sm dark:border-white/10"
+          />
+          <button
+            disabled={testState.busy}
+            className="rounded-lg border border-teal-600 px-3 py-1.5 text-sm text-teal-700 hover:bg-teal-50 disabled:opacity-50 dark:text-teal-300 dark:hover:bg-teal-950/30"
+          >
+            {testState.busy ? "Sending…" : "Send test email"}
+          </button>
+        </form>
+        {testState.msg && (
+          <p className={"mt-2 text-sm " + (testState.ok ? "text-teal-700 dark:text-teal-300" : "text-red-600")}>
+            {testState.msg}
+          </p>
         )}
       </section>
 
