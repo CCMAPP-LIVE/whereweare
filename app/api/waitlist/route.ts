@@ -4,7 +4,7 @@ import { escapeHtml, sendEmail } from "@/lib/email";
 import { sendPushToUser } from "@/lib/push/send";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-const NOTIFY_TO = process.env.WAITLIST_NOTIFY_EMAIL || "david@meyouwhen.com";
+const NOTIFY_TO = process.env.WAITLIST_NOTIFY_EMAIL || "hello@meyouwhen.com";
 
 /**
  * Public: join the MeYouWhen waiting list. Always answers "you're on the

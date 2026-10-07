@@ -1,10 +1,10 @@
 /**
- * Transactional email via Resend's HTTP API (no SDK). Sends from the booking
+ * Transactional email via Resend's HTTP API (no SDK). Sends from hello@ on the booking
  * domain, which is verified in Resend. Needs RESEND_API_KEY; without it every
  * send is a no-op that reports `false`, so callers can treat email as optional.
  */
 
-const FROM = process.env.EMAIL_FROM || "MeYouWhen <bookings@meyouwhen.com>";
+const FROM = process.env.EMAIL_FROM || "MeYouWhen <hello@meyouwhen.com>";
 
 export function escapeHtml(s: string): string {
   return s
