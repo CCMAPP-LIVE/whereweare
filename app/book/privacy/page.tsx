@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   appleWebApp: { title: "MeYouWhen" },
 };
 
-const CONTACT = "david@meyouwhen.com";
+const CONTACT = "hello@meyouwhen.com";
 
 /** Plain-English privacy notice for the waiting list and booking pages. */
 export default function PrivacyPage() {
