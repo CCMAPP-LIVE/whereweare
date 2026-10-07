@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendPushToUser } from "@/lib/push/send";
 import {
   busyForUser,
   computeSlots,
@@ -130,6 +131,32 @@ export async function POST(request: Request, { params }: Params) {
       .from("bookings")
       .update({ google_event_id: eventId, meet_url: meetUrl })
       .eq("id", booking.id);
+
+    // Tell the link's owner straight away (phone/desktop push). Best-effort:
+    // a notification failure must never undo a confirmed booking.
+    try {
+      const when = new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Europe/London",
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+      }).format(new Date(startIso));
+      const hm = (iso: string) =>
+        new Intl.DateTimeFormat("en-GB", {
+          timeZone: "Europe/London",
+          hour: "2-digit",
+          minute: "2-digit",
+        }).format(new Date(iso));
+      await sendPushToUser(admin, link.user_id, {
+        title: `New booking: ${name}`,
+        body: `${link.title} — ${when}, ${hm(startIso)}–${hm(endIso)}${
+          atClient && guestLocation ? ` · ${guestLocation}` : ""
+        }`,
+        url: "/bookings",
+      });
+    } catch {
+      // ignore
+    }
     return NextResponse.json({
       ok: true,
       start: startIso,
