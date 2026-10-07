@@ -33,6 +33,14 @@ export type ManagedLink = {
   active: boolean;
 };
 
+export type WaitlistEntry = {
+  id: string;
+  email: string;
+  name: string | null;
+  useCase: string | null;
+  createdAt: string;
+};
+
 export type ManagedBooking = {
   id: string;
   linkId: string;
@@ -463,7 +471,11 @@ export default function BookingsManager({
   initialLinks,
   bookings: initialBookings,
   setupNeeded,
+  waitlist,
+  waitlistCount,
 }: {
+  waitlist: WaitlistEntry[];
+  waitlistCount: number;
   bookingBase: string;
   accounts: ManagedAccount[];
   initialLinks: ManagedLink[];
@@ -796,6 +808,52 @@ export default function BookingsManager({
               </li>
             ))}
           </ul>
+        )}
+      </section>
+
+      <section className={section}>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h2 className="font-semibold">
+            MeYouWhen waiting list{" "}
+            <span className="rounded-full bg-teal-100 px-2 py-0.5 text-xs font-medium text-teal-800 dark:bg-teal-900/40 dark:text-teal-200">
+              {waitlistCount}
+            </span>
+          </h2>
+          {waitlistCount > 0 && (
+            <a
+              href="/api/waitlist/export"
+              className="rounded-lg border border-teal-600 px-3 py-1 text-xs text-teal-700 hover:bg-teal-50 dark:text-teal-300 dark:hover:bg-teal-950/30"
+            >
+              Download (CSV)
+            </a>
+          )}
+        </div>
+        {waitlist.length === 0 ? (
+          <p className="text-sm text-neutral-500">
+            No signups yet. People join from{" "}
+            <a href={bookingBase} target="_blank" rel="noreferrer" className="underline">
+              {bookingBase.replace(/^https?:\/\//, "")}
+            </a>{" "}
+            or the promo on your booking pages.
+          </p>
+        ) : (
+          <ul className="space-y-1.5 text-sm">
+            {waitlist.map((w) => (
+              <li key={w.id} className="flex flex-wrap items-baseline gap-x-2">
+                <span className="font-medium">{w.name ?? w.email}</span>
+                {w.name && <span className="text-xs text-neutral-500">{w.email}</span>}
+                <span className="text-xs text-neutral-400">
+                  {londonFmt(w.createdAt, { day: "numeric", month: "short" })}
+                </span>
+                {w.useCase && (
+                  <span className="basis-full text-xs text-neutral-600 dark:text-neutral-300">“{w.useCase}”</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        {waitlistCount > waitlist.length && (
+          <p className="mt-2 text-xs text-neutral-400">Showing the latest {waitlist.length}. Download for everyone.</p>
         )}
       </section>
 

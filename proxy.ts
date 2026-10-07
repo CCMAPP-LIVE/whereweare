@@ -16,6 +16,8 @@ function bookingHost(request: NextRequest) {
   // What a booking page itself needs: its booking API, Next's assets, icons.
   if (
     pathname.startsWith("/api/book/") ||
+    pathname === "/api/waitlist" ||
+    pathname.startsWith("/brand/") ||
     pathname.startsWith("/_next/") ||
     pathname.startsWith("/icons/") ||
     pathname === "/apple-icon"

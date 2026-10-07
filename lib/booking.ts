@@ -329,6 +329,8 @@ export async function cancelBookingEvent(refreshToken: string, eventId: string):
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 export const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$/;
+/** Paths meyouwhen.com uses itself, so they can't be booking link names. */
+const RESERVED_SLUGS = new Set(["privacy", "terms", "about", "pricing", "login", "signup", "waitlist"]);
 
 export function slugify(input: string): string {
   return input
@@ -382,6 +384,7 @@ export function parseLinkInput(body: unknown): { input: LinkInput; error: string
     const slug = typeof b.slug === "string" ? b.slug.trim().toLowerCase() : "";
     if (!SLUG_RE.test(slug))
       return fail("Link name must be 3–50 lowercase letters, numbers or dashes.");
+    if (RESERVED_SLUGS.has(slug)) return fail("That link name is reserved — try another.");
     input.slug = slug;
   }
   if ("title" in b) {

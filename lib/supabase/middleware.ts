@@ -15,6 +15,7 @@ const PUBLIC_PREFIXES = [
   "/week/", // read-only shared week sheets — signed token instead of login
   "/book/", // public "pick a time" booking pages (trailing slash: not /bookings)
   "/api/book/",
+  "/api/waitlist", // public signup (the /export download checks login itself)
   "/manifest.webmanifest",
   "/sw.js",
   "/icon",

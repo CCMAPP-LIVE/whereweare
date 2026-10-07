@@ -9,6 +9,7 @@ import BookingsManager, {
   type ManagedAccount,
   type ManagedBooking,
   type ManagedLink,
+  type WaitlistEntry,
 } from "@/components/BookingsManager";
 
 export const dynamic = "force-dynamic";
@@ -103,10 +104,29 @@ export default async function BookingsPage() {
     }));
   }
 
+  // MeYouWhen waiting list: total + the most recent signups.
+  const { count: waitlistCount } = await admin
+    .from("waitlist")
+    .select("id", { count: "exact", head: true });
+  const { data: waitRows } = await admin
+    .from("waitlist")
+    .select("id, email, name, use_case, created_at")
+    .order("created_at", { ascending: false })
+    .limit(10);
+  const waitlist: WaitlistEntry[] = (waitRows ?? []).map((w) => ({
+    id: w.id,
+    email: w.email,
+    name: w.name,
+    useCase: w.use_case,
+    createdAt: w.created_at,
+  }));
+
   return (
     <>
       <NavBar />
       <BookingsManager
+        waitlist={waitlist}
+        waitlistCount={waitlistCount ?? 0}
         // Customer-facing address for links, e.g. https://meyouwhen.com/brainshed.
         // Falls back to this app's own /book/ pages until the domain is live.
         bookingBase={process.env.BOOKING_BASE_URL?.replace(/\/+$/, "") || `${siteUrl()}/book`}

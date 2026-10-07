@@ -21,6 +21,7 @@ type Props = {
   inPerson: boolean;
   location: string | null; // your address (null when meeting at the client's)
   atClientLocation: boolean; // in person, at an address the client gives
+  promoUrl: string; // MeYouWhen home page (waiting list)
   slots: string[]; // ISO start times (UTC)
   unavailable: boolean;
 };
@@ -74,6 +75,7 @@ export default function BookingPicker({
   inPerson,
   location,
   atClientLocation,
+  promoUrl,
   slots,
   unavailable,
 }: Props) {
@@ -159,6 +161,30 @@ export default function BookingPicker({
     }
   }
 
+  // Quiet "get your own" promo for the MeYouWhen waiting list.
+  const promo = (
+    <aside className="mt-8 rounded-2xl border border-teal-500/30 bg-teal-50/50 p-4 dark:bg-teal-950/20">
+      <div className="flex items-center gap-3">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/brand/meyouwhen-mark.svg" alt="" className="h-9 w-9 shrink-0" />
+        <div className="min-w-0 flex-1 text-sm">
+          <p className="font-medium">Want your own booking link like this?</p>
+          <p className="text-neutral-600 dark:text-neutral-300">
+            One link that checks all your calendars. Invites from your own email.
+          </p>
+        </div>
+      </div>
+      <a
+        href={promoUrl}
+        target="_blank"
+        rel="noopener"
+        className="mt-3 block rounded-lg bg-teal-600 px-3 py-2 text-center text-sm font-medium text-white hover:bg-teal-700"
+      >
+        Join the MeYouWhen waiting list →
+      </a>
+    </aside>
+  );
+
   const header = (
     <header className="mb-5">
       <div className="mb-3">
@@ -227,6 +253,7 @@ export default function BookingPicker({
             </p>
           )}
         </section>
+        {promo}
       </main>
     );
   }
@@ -428,6 +455,7 @@ export default function BookingPicker({
           )}
         </>
       )}
+      {promo}
     </main>
   );
 }

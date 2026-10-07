@@ -86,6 +86,7 @@ export default async function BookPage({ params }: Params) {
       inPerson={link.in_person}
       location={link.in_person && link.location_mode !== "client" ? link.location : null}
       atClientLocation={link.in_person && link.location_mode === "client"}
+      promoUrl={process.env.BOOKING_BASE_URL?.replace(/\/+$/, "") || "https://meyouwhen.com"}
       slots={slots}
       unavailable={unavailable}
     />

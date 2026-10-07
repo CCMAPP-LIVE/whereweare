@@ -779,6 +779,30 @@ export type Database = {
           },
         ]
       }
+      waitlist: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          name: string | null
+          use_case: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          name?: string | null
+          use_case?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          name?: string | null
+          use_case?: string | null
+        }
+        Relationships: []
+      }
       week_events: {
         Row: {
           assignee_user_id: string | null
