@@ -384,7 +384,12 @@ function LinkForm({
             <input
               type="checkbox"
               checked={f.inPerson}
-              onChange={(e) => set("inPerson", e.target.checked)}
+              onChange={(e) => {
+                const on = e.target.checked;
+                // In person usually means no video call — untick Meet when switching
+                // to in person; re-tick it for a hybrid meeting.
+                setF((cur) => ({ ...cur, inPerson: on, addMeet: on ? false : cur.addMeet }));
+              }}
               className="accent-teal-600"
             />
             In person
