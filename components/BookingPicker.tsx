@@ -4,6 +4,7 @@ import { useMemo, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import AccountLogo from "@/components/AccountLogo";
 import type { LengthKind } from "@/lib/bookingLength";
+import { normaliseUkPostcode } from "@/lib/postcode";
 
 type Props = {
   slug: string;
@@ -83,7 +84,8 @@ export default function BookingPicker({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [notes, setNotes] = useState("");
-  const [address, setAddress] = useState("");
+  const [address, setAddress] = useState({ line1: "", line2: "", town: "", postcode: "" });
+  const postcodeOk = normaliseUkPostcode(address.postcode) !== null;
   const [website, setWebsite] = useState(""); // honeypot
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -121,6 +123,10 @@ export default function BookingPicker({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!chosen) return;
+    if (atClientLocation && !postcodeOk) {
+      setError("Please enter a UK postcode, e.g. BH23 1AB.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -133,7 +139,7 @@ export default function BookingPicker({
           email,
           notes,
           website,
-          location: atClientLocation ? address : undefined,
+          address: atClientLocation ? address : undefined,
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -343,16 +349,56 @@ export default function BookingPicker({
                 className="w-full rounded-lg border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
               />
               {atClientLocation && (
-                <textarea
-                  required
-                  minLength={5}
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="Address for the meeting (where should we come to?)"
-                  autoComplete="street-address"
-                  rows={2}
-                  className="w-full rounded-lg border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
-                />
+                <fieldset className="space-y-2">
+                  <legend className="mb-1 text-xs font-medium uppercase text-neutral-400">
+                    Where should we meet?
+                  </legend>
+                  <input
+                    required
+                    value={address.line1}
+                    onChange={(e) => setAddress((a) => ({ ...a, line1: e.target.value }))}
+                    placeholder="Address line 1"
+                    autoComplete="address-line1"
+                    className="w-full rounded-lg border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+                  />
+                  <input
+                    value={address.line2}
+                    onChange={(e) => setAddress((a) => ({ ...a, line2: e.target.value }))}
+                    placeholder="Address line 2 (optional)"
+                    autoComplete="address-line2"
+                    className="w-full rounded-lg border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      required
+                      value={address.town}
+                      onChange={(e) => setAddress((a) => ({ ...a, town: e.target.value }))}
+                      placeholder="Town / City"
+                      autoComplete="address-level2"
+                      className="w-full rounded-lg border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+                    />
+                    <input
+                      required
+                      value={address.postcode}
+                      onChange={(e) => setAddress((a) => ({ ...a, postcode: e.target.value }))}
+                      onBlur={() =>
+                        setAddress((a) => ({ ...a, postcode: normaliseUkPostcode(a.postcode) ?? a.postcode }))
+                      }
+                      placeholder="Postcode"
+                      autoComplete="postal-code"
+                      aria-invalid={address.postcode !== "" && !postcodeOk}
+                      className={
+                        "w-full rounded-lg border bg-transparent px-3 py-2 text-sm uppercase " +
+                        (address.postcode !== "" && !postcodeOk
+                          ? "border-red-500"
+                          : "border-black/10 dark:border-white/10")
+                      }
+                    />
+                  </div>
+                  {address.postcode !== "" && !postcodeOk && (
+                    <p className="text-xs text-red-600">Please enter a UK postcode, e.g. BH23 1AB.</p>
+                  )}
+                </fieldset>
               )}
               <textarea
                 value={notes}

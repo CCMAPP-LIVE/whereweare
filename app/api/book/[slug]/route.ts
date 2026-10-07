@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushToUser } from "@/lib/push/send";
+import { isRealUkPostcode, normaliseUkPostcode } from "@/lib/postcode";
 import {
   busyForUser,
   computeSlots,
@@ -30,8 +31,14 @@ export async function POST(request: Request, { params }: Params) {
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase().slice(0, 200) : "";
   const notes =
     typeof body.notes === "string" ? body.notes.trim().slice(0, 1000) || null : null;
-  const guestLocation =
-    typeof body.location === "string" ? body.location.trim().slice(0, 300) || null : null;
+  // Structured address for in-person-at-client meetings: line 1, optional
+  // line 2, town and a UK postcode, joined into one invite location.
+  const addr = (body.address ?? {}) as Record<string, unknown>;
+  const field = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+  const addrLine1 = field(addr.line1, 120);
+  const addrLine2 = field(addr.line2, 120);
+  const addrTown = field(addr.town, 80);
+  const addrPostcode = normaliseUkPostcode(field(addr.postcode, 12));
   const startMs = typeof body.start === "string" ? Date.parse(body.start) : NaN;
 
   if (!name) return NextResponse.json({ error: "Please enter your name." }, { status: 400 });
@@ -51,8 +58,19 @@ export async function POST(request: Request, { params }: Params) {
 
   // In person at the client's location: they must tell us where.
   const atClient = link.in_person && link.location_mode === "client";
-  if (atClient && (!guestLocation || guestLocation.length < 5))
-    return NextResponse.json({ error: "Please enter the address for the meeting." }, { status: 400 });
+  let guestLocation: string | null = null;
+  if (atClient) {
+    if (addrLine1.length < 3)
+      return NextResponse.json({ error: "Please enter the first line of the address." }, { status: 400 });
+    if (addrTown.length < 2)
+      return NextResponse.json({ error: "Please enter the town or city." }, { status: 400 });
+    if (!addrPostcode || !(await isRealUkPostcode(addrPostcode)))
+      return NextResponse.json(
+        { error: "That postcode doesn't look right. Please check it." },
+        { status: 400 },
+      );
+    guestLocation = [addrLine1, addrLine2, addrTown, addrPostcode].filter(Boolean).join(", ");
+  }
 
   const host = await hostAccountFor(admin, link);
   if (!host)
